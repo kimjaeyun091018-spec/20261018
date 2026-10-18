@@ -165,22 +165,39 @@ function readInput(snapMe, snap) {
   inp.atk = held('atk') || mouse.down;
   inp.s1 = held('s1'); inp.s2 = held('s2'); inp.s3 = held('s3'); inp.dash = held('dash');
   if (snapMe) {
+    const t = findTarget(snapMe, snap);
     if (!isTouch && mouse.inside) {
       inp.aim = Math.atan2(mouse.y - snapMe.y + 8, mouse.x - snapMe.x);
       inp.ad = Math.hypot(mouse.x - snapMe.x, mouse.y - snapMe.y);
-    } else {
-      // 자동 조준: 가장 가까운 적
-      const foes = [];
-      for (const e of snap.e) if (!e[10]) foes.push({ x: e[2], y: e[3] });
-      for (const h of snap.h) if (h.tm !== snapMe.tm && h.al && !h.dn) foes.push(h);
-      let best = null, bd = 1e9;
-      for (const f of foes) { const d = Math.hypot(f.x - snapMe.x, f.y - snapMe.y); if (d < bd) { bd = d; best = f; } }
-      if (best && bd < 560) { inp.aim = Math.atan2(best.y - snapMe.y, best.x - snapMe.x); inp.ad = bd; }
-      else if (inp.mx || inp.my) { inp.aim = Math.atan2(inp.my, inp.mx); inp.ad = 220; }
-      else inp.aim = snapMe.a;
-    }
+      // 살짝 도와주는 조준: 조준경이 잡은 적 쪽으로 거의 겨누고 있으면 정확히 맞춤
+      if (t && t.diff < 0.2) { inp.aim = Math.atan2(t.y - snapMe.y, t.x - snapMe.x); inp.ad = t.d; }
+    } else if (t) { inp.aim = Math.atan2(t.y - snapMe.y, t.x - snapMe.x); inp.ad = t.d; }
+    else if (inp.mx || inp.my) { inp.aim = Math.atan2(inp.my, inp.mx); inp.ad = 220; }
+    else inp.aim = snapMe.a;
   }
   return inp;
+}
+// 지금 스킬이 겨누는 적 (조준경 표시용)
+//  모바일: 가장 가까운 적 / PC: 마우스 방향에 가장 가까운 적
+function findTarget(me, snap) {
+  if (!me || !me.al) return null;
+  const foes = [];
+  for (const e of snap.e) if (!e[10] && !(e[6] > 0)) foes.push({ k: 'e', id: e[0], x: e[2], y: e[3] });
+  for (const h of snap.h) if (h.tm !== me.tm && h.al && !(h.fa > 0)) foes.push({ k: 'h', id: h.id, x: h.x, y: h.y });
+  const mouseAim = !isTouch && mouse.inside ? Math.atan2(mouse.y - me.y + 8, mouse.x - me.x) : null;
+  let best = null, bs = 1e9;
+  for (const f of foes) {
+    const d = Math.hypot(f.x - me.x, f.y - me.y);
+    if (d > 600) continue;
+    let diff = 0;
+    if (mouseAim !== null) {
+      diff = Math.abs(((Math.atan2(f.y - me.y, f.x - me.x) - mouseAim + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+      if (diff > 0.45) continue;
+    }
+    const score = mouseAim !== null ? diff * 600 + d * 0.25 : d;
+    if (score < bs) { bs = score; best = { ...f, d, diff }; }
+  }
+  return best;
 }
 
 // ---------- 게임 시작 ----------
@@ -340,7 +357,7 @@ function frame(now) {
       g.conn.send({ t: 'in', i: inp });
       tapped.clear();
     }
-    R.render(view, g.myId, { aim: !isTouch });
+    R.render(view, g.myId, { aim: !isTouch, target: findTarget(meH, view) });
     updateSkillButtons(meH);
     syncAug(meH);
     return;
@@ -367,7 +384,7 @@ function frame(now) {
     g.sendT -= dt;
     if (g.sendT <= 0) { g.sendT = 0.05; g.room.broadcast({ t: 's', s: snap }); }
   }
-  R.render(snap, g.myId, { aim: !isTouch, frozen });
+  R.render(snap, g.myId, { aim: !isTouch, frozen, target: findTarget(snap.h.find((h) => h.id === g.myId), snap) });
   const meSnap = snap.h.find((h) => h.id === g.myId);
   updateSkillButtons(meSnap);
   syncAug(meSnap);

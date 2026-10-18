@@ -738,6 +738,7 @@ export function createRenderer(canvas) {
       ctx.restore();
     }
     for (const b of bodies) b.d();
+    drawReticle(snap, opt.target, now, dt);
     P.draw(ctx, 'normal');
     for (const sh of snap.s) drawShot(ctx, sh, now, P, dt);
     for (const f of fxList) if (!groundFx.has(f.k) && f.k !== 'pillar') drawFx(ctx, f, now);
@@ -770,6 +771,41 @@ export function createRenderer(canvas) {
       ctx.restore();
     }
     if (!opt.noHud) drawHud(snap, me, now);
+  }
+  // 조준경: 지금 스킬이 겨누는 적. 대상이 바뀌면 크게 돌며 좁혀 들어와 '잠금'
+  let retKey = '', retT = 0;
+  function drawReticle(snap, t, now, dt) {
+    if (!t) { retKey = ''; return; }
+    const key = t.k + t.id;
+    if (key !== retKey) { retKey = key; retT = 0; }
+    retT += dt;
+    // 대상의 지금 위치 (보간된 화면 위치)
+    let x = t.x, y = t.y, r = 14, boss = false;
+    if (t.k === 'e') { const e = snap.e.find((u) => u[0] === t.id); if (!e) return; x = e[2]; y = e[3]; boss = !!e[12]; r = boss ? BOSSES[e[1]].r : ENEMIES[e[1]].r; }
+    else { const h = snap.h.find((u) => u.id === t.id); if (!h) return; x = h.x; y = h.y; }
+    y -= boss ? r * 0.6 : 8;
+    const lock = Math.min(1, retT / 0.18);
+    const R = (r + 10) * (1 + (1 - lock) * 1.2) + Math.sin(now / 160) * 1.5;
+    const rot = (1 - lock) * 2.2 + now / 900;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.globalAlpha = 0.35 + 0.6 * lock;
+    // 바깥 꺾쇠 4개
+    ctx.strokeStyle = '#ff5252'; ctx.lineWidth = 2.5; ctx.lineCap = 'square';
+    ctx.rotate(rot);
+    for (let i = 0; i < 4; i++) {
+      ctx.rotate(Math.PI / 2);
+      ctx.beginPath(); ctx.moveTo(R, -R * 0.45); ctx.lineTo(R, -R); ctx.lineTo(R * 0.45, -R); ctx.stroke();
+    }
+    ctx.rotate(-rot);
+    // 안쪽 원 + 십자선
+    ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(0, 0, R * 0.55, 0, TAU); ctx.stroke();
+    ctx.beginPath();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ctx.moveTo(dx * R * 0.35, dy * R * 0.35); ctx.lineTo(dx * R * 0.75, dy * R * 0.75); }
+    ctx.stroke();
+    ctx.fillStyle = '#ff5252'; ctx.fillRect(-1.5, -1.5, 3, 3);
+    ctx.restore();
   }
   function drawVoidTile(x, y, now) {
     if (!nebula) nebula = buildNebula();
