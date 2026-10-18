@@ -1,7 +1,7 @@
 // ============================================================
 //  원소 아레나 — 시작점: 메뉴 ↔ 게임, 입력, 방장/참가자 네트워크
 // ============================================================
-import { CHARS, VIEW_W, VIEW_H, MAX_PLAYERS } from './data.js';
+import { CHARS, VIEW_W, VIEW_H, MAX_PLAYERS, COLOSSEUM } from './data.js';
 import * as SIM from './sim.js';
 import { createRenderer } from './render.js';
 import { initAudio, fxSound, setMuted as audioMute, sfx } from './audio.js';
@@ -47,6 +47,7 @@ const KEYMAP = { KeyJ: 'atk', KeyQ: 's1', KeyK: 's1', KeyE: 's2', KeyL: 's2', Ke
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   if (e.code === 'Escape' && game) { togglePause(); return; }
+  if (game && UI.augOpen() && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) { pickAug(Number(e.code.slice(5)) - 1); return; }
   if (!game) return;
   keys.add(e.code);
   const a = KEYMAP[e.code];
@@ -154,7 +155,7 @@ async function startGame(cfg) {
   if (cfg.mode === 'colosseum' && !cfg.online) {
     const pool = Object.keys(CHARS).filter((k) => k !== me.char).sort(() => Math.random() - 0.5);
     const n = cfg.fmt === '1v1' ? 1 : 3;
-    for (let i = 0; i < n; i++) SIM.addHero(state, 'bot' + i, `봇 ${CHARS[pool[i]].name.split(' ')[1]}`, pool[i], { ...heroOpts(cfg, i + 1), bot: true });
+    for (let i = 0; i < n; i++) SIM.addHero(state, 'bot' + i, `봇 ${CHARS[pool[i]].name}`, pool[i], { ...heroOpts(cfg, i + 1), bot: true });
   }
   game = { role: cfg.online ? 'host' : 'solo', state, myId, cfg, paused: false, ended: false, acc: 0, sendT: 0, inputs: {}, peers: new Map(), goldSeen: 0 };
   enterPlay(me.char);
@@ -261,8 +262,18 @@ function checkEnd() {
     const me = s.heroes[g.myId];
     const hasNext = win && s.story.ch + 1 < 3;
     g.cfg.ch = s.story.ch;
-    UI.result(handlers, { win, title: win ? `${s.story.ch + 1}장 클리어!` : '전멸…', gold, combo: me?.maxCombo || 0, next: hasNext && g.role === 'solo', retry: true, note: win ? '골드로 스킬 트리를 강화하세요.' : '모은 골드는 그대로 받습니다. 스킬 트리를 강화하고 다시!' });
+    SV.stat('bestLevel', s.level, true);
+    UI.hideAug();
+    UI.result(handlers, { win, title: win ? `${s.story.ch + 1}장 클리어!` : '전멸…', gold, combo: me?.maxCombo || 0, level: s.level, augs: me?.augs || [], next: hasNext && g.role === 'solo', retry: true,
+      note: win ? '골드로 스킬 트리를 강화하거나 새 영웅을 영입하세요.' : '모은 골드는 그대로 받습니다. 강해져서 다시 도전!' });
   }
+  // 콜로세움: 봇 상대로 이기면 골드 (판마다 한 번)
+  if (s.mode === 'colosseum' && s.colo.over && !g.coloPaid) {
+    g.coloPaid = true;
+    const me = s.heroes[g.myId];
+    if (me && me.team === s.colo.winTeam) { SV.addGold(COLOSSEUM.winGold); UI.toast(`승리 보상 +${COLOSSEUM.winGold} G`); }
+  }
+  if (s.mode === 'colosseum' && !s.colo.over) g.coloPaid = false;
 }
 
 // ---------- 메인 루프 ----------
@@ -280,15 +291,20 @@ function frame(now) {
     g.sendT -= dt;
     if (g.sendT <= 0 && !g.paused) {
       g.sendT = 1 / 30;
-      g.conn.send({ t: 'in', i: readInput(meH, view) });
+      const inp = readInput(meH, view);
+      if (g.pick !== undefined) { inp.pick = g.pick; g.pick = undefined; }
+      g.conn.send({ t: 'in', i: inp });
       tapped.clear();
     }
     R.render(view, g.myId, { aim: !isTouch });
     updateSkillButtons(meH);
+    syncAug(meH);
     return;
   }
-  // 방장 / 혼자
-  if (!g.paused || g.role === 'host') {
+  // 방장 / 혼자 (혼자일 때 증강을 고르는 동안은 멈춤)
+  const meNow = g.state.heroes[g.myId];
+  const frozen = g.role === 'solo' && meNow?.choice;
+  if (!frozen && (!g.paused || g.role === 'host')) {
     const snapForAim = g.lastSnap || SIM.snapshot(g.state);
     const meS = snapForAim.h.find((h) => h.id === g.myId);
     g.acc += dt;
@@ -307,9 +323,23 @@ function frame(now) {
     g.sendT -= dt;
     if (g.sendT <= 0) { g.sendT = 0.05; g.room.broadcast({ t: 's', s: snap }); }
   }
-  R.render(snap, g.myId, { aim: !isTouch });
-  updateSkillButtons(snap.h.find((h) => h.id === g.myId));
+  R.render(snap, g.myId, { aim: !isTouch, frozen });
+  const meSnap = snap.h.find((h) => h.id === g.myId);
+  updateSkillButtons(meSnap);
+  syncAug(meSnap);
   checkEnd();
+}
+// 증강 카드: 내 영웅에게 고를 것이 있으면 보여 줌
+function syncAug(meH) {
+  if (meH?.cho && !game.ended && !(game.pickHold > performance.now())) UI.showAug(meH.cho, pickAug);
+  else UI.hideAug();
+}
+function pickAug(i) {
+  const g = game;
+  if (!g) return;
+  if (g.role === 'client') { g.pick = i; g.pickHold = performance.now() + 600; }
+  else SIM.pickAug(g.state, g.myId, i);
+  UI.hideAug();
 }
 // 참가자: 받은 두 상태 사이를 부드럽게 이어 그림
 function interpolate(g, now) {
@@ -336,11 +366,11 @@ function drawMenuBackdrop(now) {
   if (!backdrop) {
     backdrop = SIM.createState('colosseum', 'x', { arena: 0 });
     const ks = Object.keys(CHARS).sort(() => Math.random() - 0.5).slice(0, 4);
-    ks.forEach((k, i) => SIM.addHero(backdrop, 'b' + i, CHARS[k].name.split(' ')[1], k, { bot: true, slot: i, team: i + 1 }));
+    ks.forEach((k, i) => SIM.addHero(backdrop, 'b' + i, CHARS[k].name, k, { bot: true, slot: i, team: i + 1 }));
   }
   SIM.step(backdrop, {}, 1 / 60);
   if (backdrop.colo.over && backdrop.colo.t < 1) backdrop = null;
-  else R.render(SIM.snapshot(backdrop), null, { shakeMul: 0.3 });
+  else R.render(SIM.snapshot(backdrop), null, { shakeMul: 0.3, noHud: true });
 }
 
 toMenu();

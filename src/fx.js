@@ -72,7 +72,7 @@ function star(ctx, x, y, r1, r2, n, rot, color) {
 export class Particles {
   constructor() { this.list = []; }
   add(o) {
-    if (this.list.length > 1400) this.list.splice(0, 200);
+    if (this.list.length > 2600) this.list.splice(0, 300);
     const p = { x: 0, y: 0, vx: 0, vy: 0, life: 0.5, size: 3, color: '#fff', kind: 'glow', drag: 2, grav: 0, rot: rnd(0, TAU), vr: rnd(-8, 8), grow: 0, z: 0, ...o };
     p.max = p.life;
     this.list.push(p);
@@ -587,6 +587,18 @@ export function spawnFx(f, P, ui) {
     case 'hooked': P.burst(f.x, f.y, 10, { kind: 'spark', color: f.look === 'chain' ? ['#e1bee7', '#e040fb'] : ['#e1f5fe', '#4fc3f7'], sp: [120, 300], life: [0.15, 0.3], size: [2, 3] }); break;
     case 'cast': if (f.i > 0) P.burst(f.x + Math.cos(f.a) * 16, f.y + Math.sin(f.a) * 16 - 6, 5, { kind: 'glow', color: elGlow(f.el) || '#ffffff', sp: [20, 80], life: [0.15, 0.3], size: [2, 3] }); break;
     case 'markon': break;
+    case 'lethal': {
+      // KO 확정: 날아가는 방향으로 빛줄기 + 파편
+      P.burst(f.x, f.y, f.hero ? 40 : 22, { kind: 'streak', a: f.a, spread: 0.35, color: ['#ffffff', '#e3f2fd', f.color], sp: [400, 1000], life: [0.25, 0.6], size: [3, 6], drag: 2 });
+      P.burst(f.x, f.y, 18, { kind: 'spark', color: ['#ffffff', '#fff59d'], sp: [200, 600], life: [0.2, 0.4], size: [2, 4] });
+      P.add({ kind: 'ring', x: f.x, y: f.y, r0: 10, size: f.hero ? 160 : 90, life: 0.45, color: '#ffffff' });
+      break;
+    }
+    case 'heroLevel': P.burst(f.x, f.y, 26, { kind: 'glow', color: ['#ffd54f', '#fff59d', '#ffffff'], a: -Math.PI / 2, spread: 0.6, sp: [80, 300], life: [0.5, 1], size: [2, 4], drag: 2 }); break;
+    case 'augpick': P.burst(f.x, f.y - 10, f.legend ? 50 : 26, { kind: 'glow', color: f.legend ? ['#ff9100', '#ffd740', '#ffffff'] : ['#b388ff', '#80d8ff', '#ffffff'], sp: [60, 320], life: [0.5, 1], size: [2, 4], drag: 2 }); break;
+    case 'pickup': P.burst(f.x, f.y - 8, 16, { kind: 'glow', color: [f.color, '#ffffff'], sp: [60, 220], life: [0.3, 0.6], size: [2, 4], drag: 3 }); break;
+    case 'respawn': P.burst(f.x, f.y, 30, { kind: 'glow', color: [f.color, '#ffffff'], a: -Math.PI / 2, spread: 0.4, sp: [100, 400], life: [0.4, 0.8], size: [2, 4], drag: 2 }); break;
+    case 'itemdrop': P.burst(f.x, f.y, 12, { kind: 'glow', color: ['#fff59d', '#ffffff'], sp: [40, 160], life: [0.3, 0.6], size: [2, 3] }); break;
     case 'chestdrop': P.burst(f.x, f.y, 14, { kind: 'smoke', color: '#bcaaa4', sp: [40, 140], life: [0.4, 0.7], size: [4, 8], grow: 10 }); break;
     case 'bosscast': P.burst(f.x, f.y, 14, { kind: 'glow', color: ['#ff1744', '#d500f9'], sp: [60, 200], life: [0.3, 0.5], size: [2, 4] }); break;
     default:
@@ -895,6 +907,44 @@ export function drawFx(ctx, f, now) {
     case 'roll': break;
     case 'wallhit': ctx.globalAlpha = k; star(ctx, f.x, f.y, 14 * k + 4, 3, 5, f.id, 'rgba(255,255,255,.8)'); break;
     case 'die': if (f.boss) { ctx.globalCompositeOperation = 'lighter'; glow(ctx, f.x, f.y, 260 * (1 - k * k), '#ffffff', k); } break;
+    case 'lethal': {
+      // 집중선: 대상 둘레로 빠르게 모이는 하얀 선
+      ctx.globalCompositeOperation = 'lighter';
+      const n = f.hero ? 26 : 16;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TAU + f.id;
+        const r1 = 60 + 260 * k, r2 = r1 + 80 + (i % 3) * 40;
+        ctx.globalAlpha = 0.6 * k; ctx.strokeStyle = i % 2 ? '#ffffff' : '#bbdefb'; ctx.lineWidth = 2 + (i % 3);
+        ctx.beginPath(); ctx.moveTo(f.x + Math.cos(a) * r1, f.y + Math.sin(a) * r1); ctx.lineTo(f.x + Math.cos(a) * r2, f.y + Math.sin(a) * r2); ctx.stroke();
+      }
+      glow(ctx, f.x, f.y, (f.hero ? 90 : 50) * k, '#ffffff', k);
+      break;
+    }
+    case 'heroLevel': {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = k * 0.5; ctx.fillStyle = '#ffd54f'; ctx.fillRect(f.x - 14 * k, f.y - 260, 28 * k, 260);
+      glow(ctx, f.x, f.y - 10, 50 * k, '#fff59d', k);
+      break;
+    }
+    case 'respawn': {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = k * 0.6; ctx.fillStyle = f.color; ctx.fillRect(f.x - 18 * k, f.y - 320, 36 * k, 320);
+      glow(ctx, f.x, f.y - 6, 60 * k, '#ffffff', k);
+      break;
+    }
+    case 'meteorfall': {
+      // 하늘에서 떨어지는 운석
+      const h = 520 * k * k;
+      const mx = f.x + h * 0.45, my = f.y - h;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.6; ctx.strokeStyle = '#ff7043'; ctx.lineWidth = 14; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx + 70, my - 150); ctx.stroke();
+      ctx.globalAlpha = 0.9; ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 5; ctx.stroke();
+      glow(ctx, mx, my, 40, '#ff7043', 0.9);
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+      disc(ctx, mx, my, 13, '#4e342e'); disc(ctx, mx - 3, my - 3, 6, '#8d6e63');
+      break;
+    }
     default:
   }
   ctx.restore();

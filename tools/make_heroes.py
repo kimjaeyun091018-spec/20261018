@@ -1,19 +1,26 @@
-"""원소 아레나 영웅 도트 그리기 → assets/heroes.png
+"""원소 아레나 영웅 도트 → assets/heroes.png, assets/portraits.png
 
-한 줄 = 캐릭터 하나, 32x32 프레임 15개:
-  0-3 서 있기 · 4-9 걷기 · 10 공격 준비 · 11 공격 · 12 공격 마무리 · 13 맞음 · 14 쓰러짐
-오른쪽을 보는 그림만 그리고, 왼쪽은 게임에서 뒤집어 그립니다.
+영웅마다 손으로 찍은 픽셀 격자(머리·모자·몸·망토·무기, tools/hero_art.py)를 겹쳐 그리고,
+걷기·공격 같은 동작은 이 파일이 만듭니다.
+  한 칸 40x40, 한 줄 = 한 영웅, 16칸:
+  0-3 서기 · 4-9 걷기 · 10 준비 · 11 공격 · 12 마무리 · 13 맞음 · 14 쓰러짐 · 15 승리
+  portraits.png: 64x64 얼굴 (영웅 순서대로 가로)
+오른쪽을 보는 그림만 그리고, 왼쪽은 게임에서 뒤집습니다.
 실행: python3 tools/make_heroes.py
 """
 import math
+import sys
 from pathlib import Path
-from PIL import Image, ImageDraw
+from PIL import Image
 
-W = H = 32
-FRAMES = 15
-OUT = Path(__file__).resolve().parent.parent / 'assets' / 'heroes.png'
-ORDER = ['knight', 'archer', 'mage', 'ninja', 'guardian', 'priest', 'sniper', 'alchemist',
-         'berserker', 'miko', 'reaper', 'pirate']
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hero_art import HEROES, COMMON, FACE, ORDER  # noqa: E402
+
+W = H = 40
+FRAMES = 16
+OY = 2            # 모자가 들어갈 위쪽 여유
+ROOT = Path(__file__).resolve().parent.parent
+EYES = [(9, 8), (13, 8)]  # 얼굴 격자에서 눈 2x3 블록 왼쪽 위
 
 
 def hx(c):
@@ -25,50 +32,51 @@ def shade(c, k):
     r, g, b, a = c
     if k > 0:
         return (int(r + (255 - r) * k), int(g + (255 - g) * k), int(b + (255 - b) * k), a)
-    return (int(r * (1 + k)), int(g * (1 + k)), int(b * (1 + k)), a)
+    return (max(0, int(r * (1 + k))), max(0, int(g * (1 + k))), max(0, int(b * (1 + k))), a)
 
 
-SKIN = hx('#f2c49b')
-SKIN_D = hx('#d39a74')
-OUTLINE = (24, 16, 30, 255)
-EYE = hx('#1b1530')
+def check(rows, w, name):
+    for i, r in enumerate(rows):
+        if len(r) != w:
+            raise ValueError(f'{name} {i}행 길이 {len(r)} (기대 {w}): {r!r}')
 
 
-class P:
-    """프레임 하나를 그리는 붓"""
+def palette(spec):
+    pal = {k: hx(v) for k, v in COMMON.items()}
+    pal.update({k: hx(v) for k, v in spec['pal'].items()})
+    pal.setdefault('I', shade(pal['i'], -0.45))
+    return pal
 
+
+class Frame:
     def __init__(self):
         self.im = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-        self.d = ImageDraw.Draw(self.im)
+        self.px = self.im.load()
 
-    def px(self, x, y, c):
-        if 0 <= x < W and 0 <= y < H:
-            self.im.putpixel((int(x), int(y)), c)
+    def put(self, x, y, c):
+        x, y = int(round(x)), int(round(y))
+        if 0 <= x < W and 0 <= y < H and c is not None:
+            self.px[x, y] = c
 
     def rect(self, x0, y0, x1, y1, c):
-        self.d.rectangle([x0, y0, x1, y1], fill=c)
+        for y in range(int(y0), int(y1) + 1):
+            for x in range(int(x0), int(x1) + 1):
+                self.put(x, y, c)
 
-    def shaded(self, x0, y0, x1, y1, c):
-        """위·왼쪽 밝게, 아래·오른쪽 어둡게"""
-        self.rect(x0, y0, x1, y1, c)
-        self.rect(x0, y0, x1, y0, shade(c, 0.28))
-        self.rect(x0, y0, x0, y1, shade(c, 0.15))
-        self.rect(x0, y1, x1, y1, shade(c, -0.35))
-        self.rect(x1, y0 + 1, x1, y1, shade(c, -0.25))
+    def stamp(self, rows, ox, oy, pal):
+        for y, row in enumerate(rows):
+            for x, ch in enumerate(row):
+                if ch in '. ':
+                    continue
+                self.put(ox + x, oy + y, pal[ch])
 
-    def line(self, x0, y0, x1, y1, c, w=1):
-        self.d.line([x0, y0, x1, y1], fill=c, width=w)
+    def paste(self, img, ox, oy):
+        self.im.alpha_composite(img, (int(round(ox)), int(round(oy))))
+        self.px = self.im.load()
 
-    def poly(self, pts, c):
-        self.d.polygon(pts, fill=c)
-
-    def ell(self, x0, y0, x1, y1, c):
-        self.d.ellipse([x0, y0, x1, y1], fill=c)
-
-    def outline(self):
+    def outline(self, col):
         src = self.im.copy()
         sp = src.load()
-        dp = self.im.load()
         for y in range(H):
             for x in range(W):
                 if sp[x, y][3]:
@@ -76,432 +84,223 @@ class P:
                 for ox, oy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                     nx, ny = x + ox, y + oy
                     if 0 <= nx < W and 0 <= ny < H and sp[nx, ny][3] > 200:
-                        dp[x, y] = OUTLINE
+                        self.px[x, y] = col
                         break
 
 
-def pose(i):
-    """프레임 번호 → 몸 흔들림, 다리, 무기 각도(도, 0=앞, 90=아래, -90=위)"""
-    p = dict(bob=0, la=0, lb=0, wa=55, lean=0, atk=None, hurt=False)
-    if i < 4:
-        p['bob'] = [0, 0, 1, 1][i]
-        p['wa'] = 55 + [0, 2, 4, 2][i]
-    elif i < 10:
-        k = (i - 4) / 6 * math.pi * 2
-        p['la'] = round(math.sin(k) * 2)
-        p['lb'] = -p['la']
-        p['bob'] = 1 if (i - 4) % 3 == 0 else 0
-        p['wa'] = 50 + round(math.sin(k) * 8)
-        p['lean'] = 1
-    elif i == 10:
-        p.update(wa=-125, atk=0, lean=-1)
-    elif i == 11:
-        p.update(wa=15, atk=1, lean=2)
-    elif i == 12:
-        p.update(wa=70, atk=2, lean=1)
-    elif i == 13:
-        p.update(wa=-40, hurt=True, lean=-2, bob=1)
-    return p
+def grid_image(rows, pal):
+    w = len(rows[0])
+    im = Image.new('RGBA', (w, len(rows)), (0, 0, 0, 0))
+    p = im.load()
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            if ch not in '. ':
+                p[x, y] = pal[ch]
+    return im
 
 
-def hand_of(p, sx=18, sy=19, L=5):
-    a = math.radians(p['wa'])
-    return sx + p['lean'] + math.cos(a) * L, sy + p['bob'] + math.sin(a) * L
+def rotated(img, pivot, deg):
+    w, h = img.size
+    big = Image.new('RGBA', (w * 3, h * 3), (0, 0, 0, 0))
+    big.alpha_composite(img, (w, h))
+    px, py = pivot[0] + w, pivot[1] + h
+    return big.rotate(-deg, resample=Image.NEAREST, center=(px, py)), (px, py)
 
 
-# ---------------- 무기 ----------------
-def weapon(g, kind, hxp, hyp, ang, C, p):
-    a = math.radians(ang)
-    ca, sa = math.cos(a), math.sin(a)
-    if kind in ('sword', 'katana'):
-        L = 12 if kind == 'sword' else 13
-        tx, ty = hxp + ca * L, hyp + sa * L
-        g.line(hxp - ca * 2, hyp - sa * 2, hxp, hyp, C['grip'], 2)
-        g.line(hxp + ca, hyp + sa, tx, ty, C['blade'], 3 if kind == 'sword' else 2)
-        g.line(hxp + ca * 2, hyp + sa * 2, tx - ca, ty - sa, C['edge'], 1)
-        g.line(hxp - sa * 3, hyp + ca * 3, hxp + sa * 3, hyp - ca * 3, C['guard'], 2)
-    elif kind == 'daggers':
-        for off in (0, 1):
-            aa = a + (0.5 if off else 0)
-            tx, ty = hxp + math.cos(aa) * 7, hyp + math.sin(aa) * 7
-            g.line(hxp, hyp, tx, ty, C['blade'], 2)
-            g.px(tx, ty, C['edge'])
-        g.px(hxp, hyp, C['grip'])
-    elif kind == 'hammer':
-        tx, ty = hxp + ca * 11, hyp + sa * 11
-        g.line(hxp - ca * 3, hyp - sa * 3, tx, ty, C['grip'], 2)
-        hw = 4
-        pts = [(tx - sa * hw - ca * 3, ty + ca * hw - sa * 3), (tx + sa * hw - ca * 3, ty - ca * hw - sa * 3),
-               (tx + sa * hw + ca * 3, ty - ca * hw + sa * 3), (tx - sa * hw + ca * 3, ty + ca * hw + sa * 3)]
-        g.poly(pts, C['head'])
-        g.line(pts[0][0], pts[0][1], pts[1][0], pts[1][1], C['edge'], 1)
-        g.px(tx, ty, C['gem'])
-    elif kind == 'axe':
-        tx, ty = hxp + ca * 12, hyp + sa * 12
-        g.line(hxp - ca * 3, hyp - sa * 3, tx, ty, C['grip'], 2)
-        nx, ny = -sa, ca  # 날은 몸 바깥쪽
-        pts = [(tx - ca * 4, ty - sa * 4), (tx - ca * 5 + nx * 6, ty - sa * 5 + ny * 6), (tx + ca * 2 + nx * 7, ty + sa * 2 + ny * 7), (tx + ca, ty + sa)]
-        pts = [(tx - ca * 4 - nx * 1, ty - sa * 4 - ny * 1), (tx - ca * 6 - nx * 6, ty - sa * 6 - ny * 6), (tx + ca * 2 - nx * 7, ty + sa * 2 - ny * 7), (tx + ca, ty + sa)]
-        g.poly(pts, C['head'])
-        g.line(pts[1][0], pts[1][1], pts[2][0], pts[2][1], C['edge'], 1)
-    elif kind == 'scythe':
-        tx, ty = hxp + ca * 13, hyp + sa * 13
-        g.line(hxp - ca * 5, hyp - sa * 5, tx, ty, C['grip'], 1)
-        nx, ny = -sa, ca
-        bx, by = tx, ty
-        pts = []
-        for k in range(8):
-            t = k / 7
-            # 초승달 모양 날
-            px_ = bx + ca * (-t * 10) + nx * (-math.sin(t * math.pi) * 4 - t * 2)
-            py_ = by + sa * (-t * 10) + ny * (-math.sin(t * math.pi) * 4 - t * 2)
-            pts.append((px_, py_))
-        for k in range(len(pts) - 1):
-            g.line(pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1], C['blade'], 2)
-        for k in range(len(pts) - 1):
-            g.px(pts[k][0], pts[k][1], C['edge'])
-    elif kind == 'staff':
-        # 지팡이는 거의 세워 들고, 공격 땐 앞으로 내밂
-        sa_ = -70 if p['atk'] is None else (-100 if p['atk'] == 0 else -10)
-        a2 = math.radians(sa_)
-        tx, ty = hxp + math.cos(a2) * 11, hyp + math.sin(a2) * 11
-        g.line(hxp - math.cos(a2) * 5, hyp - math.sin(a2) * 5, tx, ty, C['grip'], 1)
-        g.ell(tx - 2, ty - 2, tx + 2, ty + 2, C['gem'])
-        g.px(tx - 1, ty - 1, shade(C['gem'], 0.6))
-        if C.get('crown'):
-            g.px(tx - 3, ty, C['crown']); g.px(tx + 3, ty, C['crown']); g.px(tx, ty - 3, C['crown'])
-    elif kind == 'bow':
-        fx = hxp + (2 if p['atk'] != 0 else 0)
-        g.line(fx, hyp - 8, fx + 3, hyp - 4, C['wood'], 1)
-        g.line(fx + 3, hyp - 4, fx + 3, hyp + 4, C['wood'], 1)
-        g.line(fx + 3, hyp + 4, fx, hyp + 8, C['wood'], 1)
-        g.px(fx + 3, hyp, C['gem'])
-        pull = 4 if p['atk'] == 0 else 0
-        g.line(fx, hyp - 8, fx - pull, hyp, C['string'], 1)
-        g.line(fx - pull, hyp, fx, hyp + 8, C['string'], 1)
-        if p['atk'] == 0:
-            g.line(fx - pull, hyp, fx + 6, hyp, C['arrow'], 1)
-    elif kind == 'rifle':
-        kick = -2 if p['atk'] == 1 else 0
-        y = hyp - 1
-        x0 = hxp - 5 + kick
-        g.rect(x0, y, x0 + 4, y + 2, C['wood'])
-        g.rect(x0 + 4, y, x0 + 15, y + 1, C['metal'])
-        g.px(x0 + 9, y - 1, C['gem'])
-        g.px(x0 + 10, y - 1, C['gem'])
-        g.px(x0 + 15, y, C['edge'])
-    elif kind == 'pistol':
-        kick = -1 if p['atk'] == 1 else 0
-        y = hyp - 1
-        g.rect(hxp - 1 + kick, y, hxp + 5 + kick, y + 1, C['metal'])
-        g.rect(hxp - 1 + kick, y + 2, hxp + kick, y + 3, C['wood'])
-        g.px(hxp + 5 + kick, y, C['edge'])
-    elif kind == 'flask':
-        x, y = hxp, hyp - 3
-        g.rect(x, y + 1, x + 3, y + 4, C['glass'])
-        g.rect(x + 1, y - 1, x + 2, y, C['cork'])
-        g.rect(x, y + 3, x + 3, y + 4, C['liquid'])
-        g.px(x + 1, y + 2, shade(C['glass'], 0.6))
-    elif kind == 'gohei':
-        a2 = math.radians(-60 if p['atk'] is None else (-120 if p['atk'] == 0 else 0))
-        tx, ty = hxp + math.cos(a2) * 10, hyp + math.sin(a2) * 10
-        g.line(hxp, hyp, tx, ty, C['wood'], 1)
-        for k in range(3):
-            g.rect(tx - 1 + k, ty + k * 2, tx + k, ty + 1 + k * 2, C['paper'] if k % 2 == 0 else C['gem'])
+def eye_variant(rows, mode):
+    if mode == 'normal':
+        return rows
+    g = [list(r) for r in rows]
+    for ex, ey in EYES:
+        if g[ey][ex] not in 'e':  # 눈이 가려진 영웅(복면 등)은 그대로
+            continue
+        for dy in range(3):
+            for dx in range(2):
+                if g[ey + dy][ex + dx] in 'eiwI':
+                    g[ey + dy][ex + dx] = 's'
+        if mode == 'closed':
+            g[ey + 1][ex] = 'e'; g[ey + 1][ex + 1] = 'e'
+        elif mode == 'happy':
+            g[ey + 1][ex] = 'e'; g[ey][ex + 1] = 'e'
+            if ex + 2 < len(g[0]):
+                pass
+        elif mode == 'x':
+            g[ey][ex] = 'e'; g[ey + 1][ex + 1] = 'e'; g[ey][ex + 1] = 'e'; g[ey + 1][ex] = 'e'
+    return [''.join(r) for r in g]
 
 
-# ---------------- 몸 ----------------
-def body(g, p, C):
-    b, l = p['bob'], p['lean']
-    # 다리
-    for lx, ph, col in ((12, p['lb'], shade(C['pants'], -0.2)), (17, p['la'], C['pants'])):
-        lift = 1 if ph > 0 else 0
-        g.rect(lx + l // 2 + ph // 2, 24 - lift, lx + 2 + l // 2 + ph // 2, 27 - lift, col)
-        g.rect(lx - 0 + l // 2 + ph // 2, 27 - lift, lx + 3 + l // 2 + ph // 2, 28 - lift, C['boots'])
-    # 몸통
-    g.shaded(11 + l, 17 + b, 20 + l, 24 + b, C['cloth'])
-    if C.get('trim'):
-        g.rect(11 + l, 23 + b, 20 + l, 23 + b, C['trim'])
-    if C.get('belt'):
-        g.rect(11 + l, 21 + b, 20 + l, 21 + b, C['belt'])
-        g.px(16 + l, 21 + b, C.get('buckle', hx('#ffd54f')))
-    if C.get('chest'):
-        g.rect(14 + l, 18 + b, 17 + l, 20 + b, C['chest'])
+def merge(base, over):
+    out = []
+    for br, orow in zip(base, over):
+        out.append(''.join(('.' if o == '_' else (b if o == '.' else o)) for b, o in zip(br, orow)))
+    return out
 
 
-def head(g, p, C):
-    b, l = p['bob'], p['lean']
-    x0, y0 = 10 + l, 6 + b
-    skin = C.get('skin', SKIN)
-    g.rect(x0 + 1, y0, x0 + 10, y0 + 10, skin)
-    g.rect(x0, y0 + 1, x0 + 11, y0 + 9, skin)
-    g.rect(x0 + 1, y0 + 9, x0 + 10, y0 + 10, shade(skin, -0.15))
-    if C.get('mask'):
-        g.rect(x0, y0 + 6, x0 + 11, y0 + 10, C['mask'])
-    ey = y0 + 5
-    if p['hurt']:
-        for ex in (x0 + 6, x0 + 9):
-            g.px(ex - 1, ey - 1, EYE); g.px(ex + 1, ey + 1, EYE); g.px(ex + 1, ey - 1, EYE); g.px(ex - 1, ey + 1, EYE)
-    else:
-        eye = C.get('eye', EYE)
-        for ex in (x0 + 6, x0 + 9):
-            g.rect(ex, ey, ex, ey + 1, eye)
-            if C.get('eyeglow'):
-                g.px(ex, ey, C['eyeglow'])
-        if not C.get('mask'):
-            g.px(x0 + 4, ey + 2, hx('#f48fb1'))  # 볼
-    return x0, y0
+def head_rows(spec, eyes='normal'):
+    face = spec.get('face', FACE)
+    check(face, 18, 'face')
+    check(spec['head'], 18, 'head')
+    h = merge(face, spec['head'])
+    if 'eyes' in spec:  # 눈 모양을 바꾸는 영웅 (복면, 안대 등)
+        h = merge(h, spec['eyes'])
+    return eye_variant(h, eyes)
 
 
-# ---------------- 캐릭터별 ----------------
-def draw_char(key, i):
-    g = P()
-    p = pose(i)
-    b, l = p['bob'], p['lean']
-    C = SPEC[key]
-    hand = hand_of(p)
-    back = C.get('back')
-    if back:
-        back(g, p, C)
-    body(g, p, C)
-    x0, y0 = head(g, p, C)
-    C['hat'](g, p, C, x0, y0)
-    # 앞팔 + 무기
-    hxp, hyp = hand
-    sx, sy = 18 + l, 19 + b
-    g.line(sx, sy, hxp, hyp, shade(C['cloth'], 0.1), 2)
-    weapon(g, C['weapon'], hxp, hyp, p['wa'], C, p)
-    g.rect(hxp - 1, hyp - 1, hxp, hyp, C.get('glove', SKIN))
-    if C.get('front'):
-        C['front'](g, p, C, x0, y0)
-    g.outline()
-    return g.im
-
-
-def cape(color, long=7):
-    def f(g, p, C):
-        b, l = p['bob'], p['lean']
-        sway = [0, 1, 1, 0, -1, 0][(i_global[0]) % 6] if 4 <= i_global[0] < 10 else 0
-        g.poly([(13 + l, 16 + b), (19 + l, 16 + b), (11 + l - 3 - sway, 18 + b + long + 1), (8 + l - 3 - sway, 18 + b + long - 2)], color)
-        g.poly([(13 + l, 16 + b), (16 + l, 16 + b), (9 + l - 3 - sway, 18 + b + long)], shade(color, -0.25))
-    return f
-
-
-def scarf(color):
-    def f(g, p, C, x0, y0):
-        t = i_global[0]
-        wave = [0, 1, 0, -1][t % 4]
-        g.rect(x0 + 1, y0 + 10, x0 + 10, y0 + 11, color)
-        g.line(x0 + 1, y0 + 11, x0 - 4, y0 + 9 + wave, color, 2)
-        g.line(x0 - 4, y0 + 9 + wave, x0 - 8, y0 + 11 - wave, shade(color, -0.2), 2)
-    return f
-
-
-i_global = [0]
-
-
-def hat_knight(g, p, C, x0, y0):
-    m = C['helm']
-    g.rect(x0, y0 - 1, x0 + 11, y0 + 4, m)
-    g.rect(x0, y0 + 4, x0 + 3, y0 + 9, m)
-    g.rect(x0 + 1, y0 - 2, x0 + 10, y0 - 1, shade(m, 0.25))
-    g.rect(x0 + 5, y0 + 3, x0 + 11, y0 + 3, shade(m, -0.4))  # 투구 틈
-    sway = 1 if p['lean'] > 0 else 0
-    g.poly([(x0 + 4, y0 - 2), (x0 + 7, y0 - 2), (x0 + 2 - sway, y0 - 7), (x0 - 2 - sway, y0 - 4)], C['plume'])
-    g.px(x0 + 1 - sway, y0 - 5, shade(C['plume'], 0.4))
-
-
-def hat_hood(g, p, C, x0, y0):
-    h = C['hood']
-    g.rect(x0 - 1, y0 - 2, x0 + 11, y0 + 3, h)
-    g.rect(x0 - 1, y0 + 3, x0 + 3, y0 + 10, h)
-    g.rect(x0, y0 - 3, x0 + 9, y0 - 2, shade(h, 0.2))
-    g.poly([(x0 - 1, y0), (x0 - 5, y0 + 4), (x0 - 1, y0 + 6)], shade(h, -0.2))
-    if C.get('hoodtrim'):
-        g.rect(x0 + 4, y0 + 2, x0 + 11, y0 + 2, C['hoodtrim'])
-
-
-def hat_wizard(g, p, C, x0, y0):
-    h = C['hood']
-    g.rect(x0 - 2, y0 + 1, x0 + 13, y0 + 2, shade(h, -0.15))  # 챙
-    g.poly([(x0 + 1, y0 + 1), (x0 + 10, y0 + 1), (x0 + 3, y0 - 9), (x0 - 1, y0 - 7)], h)
-    g.rect(x0 + 1, y0 - 1, x0 + 10, y0, C['hoodtrim'])
-    g.px(x0 + 1, y0 - 8, C['gem'])
-    g.rect(x0, y0 + 3, x0 + 2, y0 + 8, C['hair'])
-
-
-def hat_ninja(g, p, C, x0, y0):
-    g.rect(x0, y0 - 1, x0 + 11, y0 + 4, C['hood'])
-    g.rect(x0, y0 + 4, x0 + 3, y0 + 7, C['hood'])
-    g.rect(x0 + 2, y0 + 1, x0 + 11, y0 + 1, C['hoodtrim'])
-    t = i_global[0]
-    w = [0, 1, 0, -1][t % 4]
-    g.line(x0, y0 + 1, x0 - 5, y0 + w, C['hoodtrim'], 1)
-    g.line(x0, y0 + 2, x0 - 5, y0 + 3 - w, C['hoodtrim'], 1)
-
-
-def hat_horn(g, p, C, x0, y0):
-    m = C['helm']
-    g.rect(x0, y0 - 1, x0 + 11, y0 + 3, m)
-    g.rect(x0 + 1, y0 - 2, x0 + 10, y0 - 1, shade(m, 0.25))
-    g.rect(x0, y0 + 3, x0 + 2, y0 + 9, m)
-    for sx in (x0 - 1, x0 + 10):
-        d = -1 if sx < x0 + 5 else 1
-        g.line(sx, y0, sx + d * 2, y0 - 4, C['horn'], 2)
-        g.px(sx + d * 3, y0 - 6, C['horn'])
-    g.rect(x0 + 5, y0 + 8, x0 + 11, y0 + 11, C['hair'])  # 수염
-    g.rect(x0 + 6, y0 + 11, x0 + 10, y0 + 12, C['hair'])
-    g.rect(x0 + 7, y0 + 12, x0 + 9, y0 + 13, shade(C['hair'], -0.2))
-
-
-def hat_priest(g, p, C, x0, y0):
-    h = C['hood']
-    g.rect(x0 - 1, y0 - 2, x0 + 11, y0 + 2, h)
-    g.rect(x0 - 1, y0 + 2, x0 + 3, y0 + 11, h)
-    g.rect(x0 + 3, y0 - 1, x0 + 11, y0, C['hoodtrim'])
-    g.px(x0 + 6, y0 - 4, C['gem']); g.px(x0 + 6, y0 - 3, C['gem']); g.px(x0 + 5, y0 - 3, C['gem']); g.px(x0 + 7, y0 - 3, C['gem'])
-
-
-def hat_goggle(g, p, C, x0, y0):
-    g.rect(x0, y0 - 1, x0 + 11, y0 + 3, C['hair'])
-    g.rect(x0 - 1, y0 + 1, x0 + 1, y0 + 8, C['hair'])
-    g.rect(x0 + 2, y0 - 2, x0 + 8, y0, C['hair'])
-    g.rect(x0 + 4, y0 + 1, x0 + 11, y0 + 3, C['strap'])
-    g.rect(x0 + 5, y0 + 1, x0 + 7, y0 + 3, C['lens'])
-    g.rect(x0 + 9, y0 + 1, x0 + 11, y0 + 3, C['lens'])
-    g.px(x0 + 5, y0 + 1, hx('#ffffff')); g.px(x0 + 9, y0 + 1, hx('#ffffff'))
-
-
-def hat_spiky(g, p, C, x0, y0):
-    h = C['hair']
-    g.rect(x0, y0 - 1, x0 + 11, y0 + 3, h)
-    g.rect(x0 - 1, y0 + 2, x0 + 2, y0 + 8, h)
-    for k in range(5):
-        g.poly([(x0 + k * 2.4, y0), (x0 + k * 2.4 + 3, y0), (x0 + k * 2.4 - 1, y0 - 4 - (k % 2) * 2)], h)
-    g.rect(x0 + 2, y0 + 2, x0 + 11, y0 + 3, C['band'])
-    g.line(x0, y0 + 3, x0 - 5, y0 + 6, C['band'], 1)
-
-
-def hat_miko(g, p, C, x0, y0):
-    h = C['hair']
-    g.rect(x0, y0 - 1, x0 + 11, y0 + 3, h)
-    g.rect(x0 - 2, y0 + 1, x0 + 2, y0 + 14, h)  # 긴 머리
-    g.rect(x0 + 6, y0 + 3, x0 + 11, y0 + 4, h)  # 앞머리
-    g.rect(x0 - 3, y0 - 2, x0 - 1, y0 + 1, C['bow'])
-    g.rect(x0 - 2, y0 + 9, x0, y0 + 10, C['bow'])
-
-
-def hat_reaper(g, p, C, x0, y0):
-    h = C['hood']
-    g.rect(x0 - 2, y0 - 2, x0 + 11, y0 + 11, h)
-    g.rect(x0 - 1, y0 - 3, x0 + 9, y0 - 2, shade(h, 0.15))
-    g.poly([(x0 - 2, y0 - 1), (x0 - 7, y0 + 2), (x0 - 2, y0 + 5)], shade(h, -0.2))
-    g.rect(x0 + 4, y0 + 2, x0 + 11, y0 + 9, hx('#0d0a14'))  # 어두운 얼굴
-    if not p['hurt']:
-        g.rect(x0 + 6, y0 + 5, x0 + 6, y0 + 6, C['eyeglow'])
-        g.rect(x0 + 9, y0 + 5, x0 + 9, y0 + 6, C['eyeglow'])
-
-
-def hat_pirate(g, p, C, x0, y0):
-    h = C['hood']
-    g.rect(x0 - 2, y0 + 1, x0 + 13, y0 + 2, h)
-    g.poly([(x0, y0 + 1), (x0 + 11, y0 + 1), (x0 + 9, y0 - 4), (x0 + 2, y0 - 4)], h)
-    g.rect(x0 + 2, y0 - 1, x0 + 9, y0 - 1, C['hoodtrim'])
-    g.px(x0 + 5, y0 - 3, hx('#eeeeee')); g.px(x0 + 6, y0 - 3, hx('#eeeeee'))
-    g.rect(x0, y0 + 3, x0 + 2, y0 + 9, C['hair'])
-    g.rect(x0 + 8, y0 + 4, x0 + 10, y0 + 6, hx('#1b1530'))  # 안대
-    g.line(x0 + 3, y0 + 3, x0 + 8, y0 + 5, hx('#1b1530'), 1)
-
-
-def quiver(g, p, C):
-    b, l = p['bob'], p['lean']
-    g.rect(9 + l, 15 + b, 11 + l, 22 + b, C['wood'])
-    for k in range(3):
-        g.px(9 + l + k, 14 + b - (k % 2), C['arrow'])
-
-
-def backpack(g, p, C):
-    b, l = p['bob'], p['lean']
-    g.shaded(7 + l, 16 + b, 11 + l, 23 + b, C['pack'])
-    g.rect(8 + l, 17 + b, 10 + l, 18 + b, C['liquid'])
-
-
-def robe_skirt(color):
-    def f(g, p, C, x0, y0):
-        b, l = p['bob'], p['lean']
-        g.poly([(11 + l, 23 + b), (20 + l, 23 + b), (22 + l, 28), (9 + l, 28)], color)
-        g.rect(9 + l, 27, 22 + l, 28, shade(color, -0.3))
-        if C.get('trim'):
-            g.rect(10 + l, 26, 21 + l, 26, C['trim'])
-    return f
-
-
-def combine(*fs):
-    def f(*a):
-        for x in fs:
-            x(*a)
-    return f
-
-
-SPEC = {
-    'knight': dict(cloth=hx('#9aa5b8'), chest=hx('#d32f2f'), pants=hx('#5c6577'), boots=hx('#3e4452'), belt=hx('#6d4c41'),
-                   helm=hx('#b8c2d2'), plume=hx('#ff5722'), hat=hat_knight, weapon='sword', glove=hx('#8a94a6'),
-                   grip=hx('#5d4037'), blade=hx('#e0e6ef'), edge=hx('#ffab40'), guard=hx('#ffca28'), back=cape(hx('#c62828'), 8)),
-    'archer': dict(cloth=hx('#5d7a3a'), pants=hx('#6d4c2f'), boots=hx('#4e342e'), belt=hx('#8d6e63'), hood=hx('#f9a825'), hoodtrim=hx('#fff176'),
-                   hat=hat_hood, weapon='bow', wood=hx('#8d5a2b'), string=hx('#fff9c4'), arrow=hx('#e0e0e0'), gem=hx('#ffeb3b'), back=quiver),
-    'mage': dict(cloth=hx('#1e5fb8'), pants=hx('#173f7a'), boots=hx('#102a52'), hood=hx('#1976d2'), hoodtrim=hx('#b3e5fc'), hair=hx('#e3f2fd'),
-                 hat=hat_wizard, weapon='staff', grip=hx('#cfd8dc'), gem=hx('#81d4fa'), crown=hx('#e1f5fe'), trim=hx('#b3e5fc'),
-                 front=robe_skirt(hx('#1e5fb8'))),
-    'ninja': dict(cloth=hx('#2b3a2c'), pants=hx('#1f2a20'), boots=hx('#141b15'), belt=hx('#66bb6a'), hood=hx('#263228'), hoodtrim=hx('#a5d6a7'),
-                  mask=hx('#263228'), hat=hat_ninja, weapon='daggers', blade=hx('#e8f5e9'), edge=hx('#ffffff'), grip=hx('#3e2723'),
-                  front=scarf(hx('#81c784'))),
-    'guardian': dict(cloth=hx('#8d6e63'), chest=hx('#c49a6c'), pants=hx('#5d4037'), boots=hx('#3e2723'), belt=hx('#3e2723'), helm=hx('#a1887f'),
-                     horn=hx('#efebe9'), hair=hx('#ff8a65'), hat=hat_horn, weapon='hammer', grip=hx('#5d4037'), head=hx('#8d8d8d'),
-                     edge=hx('#cfcfcf'), gem=hx('#ffb74d'), glove=hx('#6d4c41'), back=cape(hx('#6d4c41'), 5)),
-    'priest': dict(cloth=hx('#eceff1'), pants=hx('#b0bec5'), boots=hx('#78909c'), hood=hx('#e3f2fd'), hoodtrim=hx('#4fc3f7'), trim=hx('#29b6f6'),
-                   hat=hat_priest, weapon='staff', grip=hx('#ffe082'), gem=hx('#4fc3f7'), crown=hx('#ffe082'), chest=hx('#4fc3f7'),
-                   front=robe_skirt(hx('#eceff1'))),
-    'sniper': dict(cloth=hx('#3b2a5c'), pants=hx('#2a1f40'), boots=hx('#1a1328'), belt=hx('#9c64ff'), hood=hx('#4a3472'), hoodtrim=hx('#9c64ff'),
-                   mask=hx('#2a1f40'), hat=hat_hood, weapon='rifle', wood=hx('#4e342e'), metal=hx('#78909c'), gem=hx('#d1b3ff'), edge=hx('#b388ff'),
-                   back=cape(hx('#311b52'), 9)),
-    'alchemist': dict(cloth=hx('#7b5a3a'), chest=hx('#9ccc65'), pants=hx('#4e3b28'), boots=hx('#33261a'), belt=hx('#3e2c1c'), hair=hx('#8d6e63'),
-                      strap=hx('#3e2723'), lens=hx('#c5e1a5'), hat=hat_goggle, weapon='flask', glass=hx('#dcedc8'), cork=hx('#a1887f'),
-                      liquid=hx('#7cb342'), pack=hx('#6d4c41'), back=backpack),
-    'berserker': dict(cloth=hx('#8b2d1e'), chest=hx('#ffab40'), pants=hx('#3e2723'), boots=hx('#211512'), belt=hx('#1b1b1b'), hair=hx('#ff7043'),
-                      band=hx('#212121'), hat=hat_spiky, weapon='axe', grip=hx('#4e342e'), head=hx('#9e9e9e'), edge=hx('#ff6d00'),
-                      skin=hx('#e0a37a'), glove=hx('#5d4037')),
-    'miko': dict(cloth=hx('#fafafa'), chest=hx('#e53935'), pants=hx('#d32f2f'), boots=hx('#5d4037'), hair=hx('#2b2140'), bow=hx('#e53935'),
-                 hat=hat_miko, weapon='gohei', wood=hx('#8d6e63'), paper=hx('#ffffff'), gem=hx('#ffe14d'), trim=hx('#e53935'),
-                 front=robe_skirt(hx('#d32f2f'))),
-    'reaper': dict(cloth=hx('#231b30'), pants=hx('#18121f'), boots=hx('#0f0b14'), hood=hx('#2c2240'), eyeglow=hx('#e040fb'), hat=hat_reaper,
-                   weapon='scythe', grip=hx('#5d4037'), blade=hx('#b0a8c8'), edge=hx('#e1bee7'), glove=hx('#cfc6e0'),
-                   back=cape(hx('#1a1426'), 10), front=robe_skirt(hx('#231b30'))),
-    'pirate': dict(cloth=hx('#1565c0'), chest=hx('#fafafa'), pants=hx('#3e2723'), boots=hx('#211512'), belt=hx('#5d4037'), hood=hx('#212121'),
-                   hoodtrim=hx('#ffd54f'), hair=hx('#6d4c41'), hat=hat_pirate, weapon='pistol', metal=hx('#90a4ae'), wood=hx('#6d4c41'),
-                   edge=hx('#4fc3f7'), back=cape(hx('#0d47a1'), 6)),
+# 무기 각도 (도, 0 = 오른쪽, 90 = 아래, -90 = 위)
+ANG = {
+    'melee': dict(rest=60, windup=-130, strike=15, follow=80, hurt=20, win=-85),
+    'heavy': dict(rest=70, windup=-150, strike=30, follow=95, hurt=40, win=-80),
+    'staff': dict(rest=-70, windup=-110, strike=-15, follow=-40, hurt=-50, win=-95),
+    'bow': dict(rest=0, windup=0, strike=0, follow=0, hurt=10, win=-60),
+    'gun': dict(rest=10, windup=-10, strike=0, follow=-20, hurt=40, win=-70),
+    'hold': dict(rest=20, windup=-60, strike=-5, follow=30, hurt=40, win=-80),
 }
 
 
-def dead_frame(img):
-    lying = img.rotate(90, expand=False, resample=Image.NEAREST)
+def pose(i, spec):
+    A = {**ANG[spec['kind']], **spec.get('ang', {})}
+    p = dict(bob=0, la=0, lb=0, wa=A['rest'], lean=0, eyes='normal', atk=None, cape=0)
+    if i < 4:
+        p['bob'] = [0, 0, 1, 1][i]
+        p['wa'] = A['rest'] + [0, 2, 3, 1][i]
+        p['cape'] = [0, 0, 1, 1][i]
+    elif i < 10:
+        k = (i - 4) / 6 * math.tau
+        p['la'] = round(math.sin(k) * 2.2)
+        p['lb'] = -p['la']
+        p['bob'] = 1 if (i - 4) % 3 == 0 else 0
+        p['wa'] = A['rest'] + round(math.sin(k) * 6)
+        p['lean'] = 1
+        p['cape'] = 2 + (i % 2)
+    elif i == 10:
+        p.update(wa=A['windup'], atk=0, lean=-1, cape=1)
+    elif i == 11:
+        p.update(wa=A['strike'], atk=1, lean=2, cape=3)
+    elif i == 12:
+        p.update(wa=A['follow'], atk=2, lean=1, cape=2)
+    elif i == 13:
+        p.update(wa=A['hurt'], eyes='closed', lean=-2, bob=1, cape=1, atk='hurt')
+    elif i == 15:
+        p.update(wa=A['win'], eyes='happy', bob=-1, cape=2, atk='win')
+    elif i == 14:
+        p.update(eyes='x')
+    return p
+
+
+def draw_legs(f, p, pal, spec):
+    pc, oc, ol = (pal[c] for c in spec['legs'])
+    base = 29 + OY
+    for lx, ph, dark in ((15, p['lb'], True), (20, p['la'], False)):
+        col = shade(pc, -0.25) if dark else pc
+        lift = 1 if ph > 0 else 0
+        x = lx + p['lean'] // 2 + ph
+        f.rect(x, base - lift, x + 2, base + 4 - lift, col)
+        f.rect(x, base + 5 - lift, x + 3, base + 7 - lift, shade(oc, -0.25) if dark else oc)
+        f.put(x + 1, base + 5 - lift, ol)
+
+
+def draw_frame(key, i):
+    spec = HEROES[key]
+    pal = palette(spec)
+    p = pose(i, spec)
+    f = Frame()
+    b, l = p['bob'], p['lean']
+    # 등 뒤
+    for rows, (bx, by) in spec.get('back', []):
+        sway = [0, 0, -1, 1][p['cape'] % 4] if spec.get('sway', True) else 0
+        f.stamp(rows, bx + l + sway, by + b + OY, pal)
+    # 뒤 무기 (무기가 몸 뒤로 가는 자세)
+    W_ = spec['weapon']
+    wimg = grid_image(W_['grid'], pal)
+    sx, sy = 25 + l + spec.get('shoulder', (0, 0))[0], 21 + b + OY + spec.get('shoulder', (0, 0))[1]
+    if spec['kind'] in ('melee', 'heavy', 'hold'):
+        a = math.radians(p['wa'])
+        reach = spec.get('reach', 4)
+        hxp, hyp = sx + math.cos(a) * reach, sy + math.sin(a) * reach + 1
+    else:
+        push = {0: -1, 1: 2, 2: 1, 'win': 0, 'hurt': -1}.get(p['atk'], 0)
+        hxp, hyp = sx + 2 + push, sy + 1 + (-3 if p['atk'] == 'win' else 0)
+    rimg, (px_, py_) = rotated(wimg, W_['pivot'], p['wa'])
+    behind = spec.get('behind') and (p['wa'] < -60)
+    if behind:
+        f.paste(rimg, hxp - px_, hyp - py_)
+    draw_legs(f, p, pal, spec)
+    check(spec['body'], 14, key + ' body')
+    f.stamp(spec['body'], 13 + l, 18 + b + OY, pal)
+    hd = head_rows(spec, p['eyes'])
+    hat = spec.get('hat', [])
+    check(hat, 18, key + ' hat')
+    f.stamp(hat, 11 + l, 2 + b + OY - len(hat), pal)
+    f.stamp(hd, 11 + l, 2 + b + OY, pal)
+    for rows, (fx, fy) in spec.get('front', []):
+        f.stamp(rows, fx + l, fy + b + OY, pal)
+    if not behind:
+        f.paste(rimg, hxp - px_, hyp - py_)
+    # 팔 (어깨 → 손)
+    arm = pal[spec.get('arm', 'a')]
+    for k in range(7):
+        t = k / 6
+        f.put(sx + (hxp - sx) * t, sy + (hyp - sy) * t, arm)
+        f.put(sx + (hxp - sx) * t, sy + (hyp - sy) * t + 1, shade(arm, -0.35))
+    f.rect(hxp - 1, hyp - 1, hxp, hyp, pal[spec.get('glove', 's')])
+    f.outline(pal['k'])
+    return f.im
+
+
+def dead_frame(key):
+    img = draw_frame(key, 14)
+    lying = img.rotate(90, resample=Image.NEAREST)
     out = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    out.alpha_composite(lying, (0, 8))
+    out.alpha_composite(lying, (0, 10))
+    return out
+
+
+def portrait(key):
+    """64x64 얼굴: 머리(+모자)와 어깨를 3배로"""
+    spec = HEROES[key]
+    pal = palette(spec)
+    hat = spec.get('hat', [])
+    top = len(hat)
+    canvas = Image.new('RGBA', (24, top + 26), (0, 0, 0, 0))
+    for rows, (bx, by) in spec.get('back', []):
+        if spec.get('back_in_portrait', True):
+            canvas.alpha_composite(grid_image(rows, pal), (bx - 10, by - 2 + top))
+    canvas.alpha_composite(grid_image(spec['body'], pal), (3 + 2, 16 + top))
+    if hat:
+        canvas.alpha_composite(grid_image(hat, pal), (1 + 2, 0))
+    canvas.alpha_composite(grid_image(head_rows(spec), pal), (1 + 2, top))
+    for rows, (fx, fy) in spec.get('front', []):
+        canvas.alpha_composite(grid_image(rows, pal), (fx - 10 + 2, fy - 2 + top))
+    # 얼굴이 가운데 오도록 22x22 잘라서 3배
+    cy = top + 9
+    crop = canvas.crop((1, cy - 10, 23, cy + 12)).resize((66, 66), Image.NEAREST).crop((1, 1, 65, 65))
+    out = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
+    out.alpha_composite(crop)
+    src = out.copy(); sp = src.load(); dp = out.load()
+    for y in range(64):
+        for x in range(64):
+            if sp[x, y][3]:
+                continue
+            for ox, oy in ((2, 0), (-2, 0), (0, 2), (0, -2), (1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + ox, y + oy
+                if 0 <= nx < 64 and 0 <= ny < 64 and sp[nx, ny][3] > 200:
+                    dp[x, y] = pal['k']
+                    break
     return out
 
 
 def main():
     sheet = Image.new('RGBA', (W * FRAMES, H * len(ORDER)), (0, 0, 0, 0))
+    ports = Image.new('RGBA', (64 * len(ORDER), 64), (0, 0, 0, 0))
     for r, key in enumerate(ORDER):
-        idle = None
-        for i in range(FRAMES - 1):
-            i_global[0] = i
-            im = draw_char(key, i)
-            if i == 0:
-                idle = im
-            sheet.alpha_composite(im, (i * W, r * H))
-        sheet.alpha_composite(dead_frame(idle), ((FRAMES - 1) * W, r * H))
-    sheet.save(OUT)
-    print('saved', OUT, sheet.size)
+        if key not in HEROES:
+            continue
+        for i in range(FRAMES):
+            sheet.alpha_composite(dead_frame(key) if i == 14 else draw_frame(key, i), (i * W, r * H))
+        ports.alpha_composite(portrait(key), (r * 64, 0))
+    sheet.save(ROOT / 'assets' / 'heroes.png')
+    ports.save(ROOT / 'assets' / 'portraits.png')
+    print('saved', sheet.size, ports.size)
 
 
 if __name__ == '__main__':

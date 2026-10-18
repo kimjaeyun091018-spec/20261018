@@ -56,8 +56,8 @@ button.story:hover { filter: brightness(1.15); } button.colo:hover { filter: bri
 .detail p { margin: 6px 0; color: var(--sub); }
 .dtop small { color: var(--sub); margin-left: 8px; }
 .sklist { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
-.sklist .sk { padding: 8px; border-radius: 10px; background: #1b1636; border: 1px solid #352c5c; }
-.sklist .sk.basic { border-color: #5c4f99; }
+.sklist .skc { padding: 8px; border-radius: 10px; background: #1b1636; border: 1px solid #352c5c; }
+.sklist .skc.basic { border-color: #5c4f99; }
 .sklist .key { display: inline-block; background: #3a2f6c; border-radius: 5px; padding: 0 5px; font-size: 11px; margin-right: 6px; color: var(--gold); }
 .sklist small { display: block; color: var(--sub); font-size: 11px; margin-top: 3px; }
 
@@ -125,3 +125,54 @@ button.story:hover { filter: brightness(1.15); } button.colo:hover { filter: bri
 #toast.on { opacity: 1; transform: translate(-50%, 0); }
 @media (max-width: 560px) { .bigbtns { grid-template-columns: 1fr; } button.big b { font-size: 22px; } }
 @media (max-height: 520px) { .logo { font-size: 44px; } .title { gap: 8px; } button.big { padding: 10px 14px; } .sk { width: 54px; height: 54px; } }
+
+/* 영웅 선택 */
+.char { position: relative; }
+.char .ctitle { color: var(--sub); font-size: 11px; }
+.char.locked { filter: saturate(.55); }
+.char.locked .cname { color: #9e97b8; }
+.char .price { color: var(--gold); font-weight: 900; font-size: 12px; margin-top: 2px; }
+.char .tagcur { position: absolute; top: 6px; right: 6px; background: var(--c); color: #111; font-size: 10px; font-weight: 900; padding: 1px 6px; border-radius: 6px; }
+.detail.hero { padding: 14px; }
+.hero-top { display: flex; gap: 14px; align-items: flex-start; }
+.bustslot { flex: none; border-radius: 16px; overflow: hidden; border: 2px solid var(--c); box-shadow: 0 0 24px -6px var(--c); background: radial-gradient(circle at 50% 70%, rgba(255,255,255,.08), rgba(0,0,0,.2)); }
+.bustslot canvas { display: block; width: 128px; height: 128px; image-rendering: pixelated; }
+.hero-name b { font-family: 'Black Han Sans', sans-serif; font-weight: 400; font-size: 30px; color: var(--c); letter-spacing: 1px; }
+.hero-name .ctitle { color: var(--sub); font-size: 14px; margin-left: 6px; }
+.hero-tags { margin: 4px 0 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.hero-tags small { color: var(--sub); }
+.quote { margin: 6px 0; font-style: italic; color: #fff3e0; font-size: 15px; }
+.lore { margin: 4px 0 0; color: var(--sub); font-size: 13px; line-height: 1.6; }
+.detail .rowbtns { margin-top: 10px; }
+button.big.buy { background: linear-gradient(135deg, #ffb300, #f57c00); border-color: #ffe082; color: #2b1600; text-align: center; font-weight: 900; }
+button.big.pick { background: linear-gradient(135deg, #5b47b8, #3a2f6c); text-align: center; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+.cur small.inl { display: inline; color: var(--sub); }
+@media (max-width: 560px) { .hero-top { flex-direction: column; align-items: center; text-align: center; } .hero-tags { justify-content: center; } }
+
+/* 증강 고르기 */
+#aug { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(20,10,50,.55), rgba(5,3,14,.85)); padding: 14px; }
+#aug[hidden] { display: none; }
+.augwrap { text-align: center; width: min(820px, 100%); animation: augIn .35s cubic-bezier(.2,1.4,.4,1); }
+.augwrap h2 { margin: 0; font-family: 'Black Han Sans', sans-serif; font-weight: 400; font-size: clamp(32px, 6vw, 54px); color: #ffd54f; text-shadow: 0 4px 0 #3a1d6e, 0 0 24px rgba(255,213,79,.5); letter-spacing: 2px; }
+.augwrap.leg h2 { color: #ff9100; text-shadow: 0 4px 0 #4a1a00, 0 0 30px rgba(255,145,0,.7); }
+.augcards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+.augcard { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 12px 16px; border-radius: 16px; border: 2px solid #7c4dff; background: linear-gradient(180deg, #2a1d5c, #140e30); box-shadow: 0 10px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.15); animation: cardIn .45s backwards; }
+.augcard:nth-child(2) { animation-delay: .07s; } .augcard:nth-child(3) { animation-delay: .14s; }
+.augcard:hover { transform: translateY(-4px) scale(1.03); border-color: #b388ff; background: linear-gradient(180deg, #3a2a7a, #1b1240); }
+.leg .augcard { border-color: #ff9100; background: linear-gradient(180deg, #5a2a00, #1e0e02); }
+.leg .augcard:hover { border-color: #ffd740; }
+.augcard .aicon { font-size: 40px; filter: drop-shadow(0 4px 6px rgba(0,0,0,.6)); }
+.augcard b { font-family: 'Black Han Sans', sans-serif; font-weight: 400; font-size: 20px; color: #fff; }
+.augcard small { color: #d1c4e9; font-size: 13px; line-height: 1.5; }
+.augcard .akey { position: absolute; top: 8px; left: 10px; font-size: 11px; color: var(--gold); opacity: .8; }
+@keyframes augIn { from { transform: scale(.8); opacity: 0; } }
+@keyframes cardIn { from { transform: translateY(30px) rotateX(40deg); opacity: 0; } }
+@media (max-width: 600px) { .augcards { grid-template-columns: 1fr; } .augcard { flex-direction: row; text-align: left; padding: 10px 12px; } .augcard .aicon { font-size: 30px; } }
+.auglist { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 8px 0; }
+.augchip { background: #241a4a; border: 1px solid #5b47b8; border-radius: 8px; padding: 3px 8px; font-size: 12px; }
+.augchip.leg { border-color: #ff9100; background: #3a1d00; }
+.skills.pc .sk { width: 70px; height: 70px; }
+.skills.pc .sk b { font-size: 10px; line-height: 1.15; word-break: keep-all; }
+
+.cur div { line-height: 1.4; }
