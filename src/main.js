@@ -8,6 +8,7 @@ import { initAudio, fxSound, setMuted as audioMute, sfx } from './audio.js';
 import * as NET from './net.js';
 import * as SV from './save.js';
 import * as UI from './ui.js';
+import { preloadGoogle, googleSignIn, googleError, signOut, savedAccount, pullSave, queuePush, flushPush, cloudStatus, onCloudStatus } from './cloud.js';
 
 const canvas = document.getElementById('game');
 const R = createRenderer(canvas);
@@ -37,6 +38,49 @@ const handlers = {
 };
 let game_last = null;
 function toMenu() { history.length = 0; history.push('title'); UI.title(handlers); }
+
+// ---------- 구글 계정 · 클라우드 저장 ----------
+const SEEN_KEY = 'elementArena.started';
+let gAcc = savedAccount(); // { uid, name, email } 또는 null
+if (gAcc) SV.useAccount(`g-${gAcc.uid}`);
+SV.onSaveWrite((d) => { if (gAcc) queuePush(gAcc.uid, d); });
+onCloudStatus(() => { if (!game && history[history.length - 1] === 'title') UI.account(handlers); });
+Object.assign(handlers, {
+  accountInfo: () => (gAcc ? { name: gAcc.name, status: cloudStatus() } : null),
+  preload: () => { preloadGoogle().catch(() => {}); },
+  refresh: () => { if (!game) toMenu(); },
+  async google() {
+    let r;
+    try { r = await googleSignIn(); } catch (e) { throw new Error(googleError(e)); }
+    const carry = JSON.parse(JSON.stringify(SV.S())); // 지금(게스트) 진행
+    gAcc = { uid: r.uid, name: r.name, email: r.email };
+    const acc = `g-${r.uid}`;
+    const hadLocal = SV.hasLocal(acc);
+    SV.useAccount(acc);
+    let cloud = null;
+    try { cloud = await pullSave(r.uid); } catch (e) { console.warn(e); }
+    let note;
+    if (cloud && cloud.t >= (hadLocal ? SV.S()._t || 0 : 0)) { SV.replaceWith(cloud.save, cloud.t); note = '클라우드 저장을 불러왔어요'; }
+    else if (hadLocal) { SV.save(); note = '이 기기의 저장을 클라우드에 올렸어요'; }
+    else { SV.replaceWith(carry, Date.now()); SV.save(); note = '지금까지의 진행을 구글 계정으로 옮겼어요'; }
+    if (!SV.S().name && r.name) SV.setName(r.name.slice(0, 10));
+    localStorage.setItem(SEEN_KEY, '1');
+    return `${r.name || '구글'} 계정으로 로그인했어요. ${note}`;
+  },
+  guest() { try { localStorage.setItem(SEEN_KEY, '1'); } catch { /* 무시 */ } },
+  done() { toMenu(); },
+  async sync() {
+    if (!gAcc) return '';
+    const cloud = await pullSave(gAcc.uid);
+    if (cloud && cloud.t > (SV.S()._t || 0)) { SV.replaceWith(cloud.save, cloud.t); return '클라우드의 더 최근 저장을 불러왔어요'; }
+    SV.save();
+    await flushPush();
+    return cloudStatus() || '클라우드에 저장했어요';
+  },
+  logout() { flushPush(); signOut(); gAcc = null; SV.useAccount(null); },
+});
+// 다시 들어왔을 때: 다른 기기에서 한 진행이 더 최근이면 받아 옴
+if (gAcc) handlers.sync().then(() => { if (!game) toMenu(); }).catch((e) => console.warn('클라우드 불러오기 실패', e));
 
 // ---------- 입력 ----------
 const keys = new Set();
@@ -373,7 +417,9 @@ function drawMenuBackdrop(now) {
   else R.render(SIM.snapshot(backdrop), null, { shakeMul: 0.3, noHud: true });
 }
 
-toMenu();
+let firstVisit = false;
+try { firstVisit = !gAcc && !localStorage.getItem(SEEN_KEY) && !SV.hasLocal(null); } catch { /* 무시 */ }
+if (firstVisit) UI.login(handlers); else toMenu();
 requestAnimationFrame(frame);
 // 디버그·테스트용
 window.__ea = { get game() { return game; }, SIM, SV, startGame, quitGame };

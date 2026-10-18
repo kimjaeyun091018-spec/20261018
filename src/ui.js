@@ -82,15 +82,56 @@ export function title(h) {
         <button data-go="join">코드로 참가</button>
         <button data-go="guide">도움말</button>
       </div>
+      <div class="acct" id="acct"></div>
       <p class="foot">PC: WASD 이동 · 마우스 조준 · 클릭 공격 · Q E R 스킬 · Space 대시 &nbsp;|&nbsp; 모바일: 왼쪽 조이스틱 · 오른쪽 버튼 (자동 조준)</p>
     </div>`);
   const C = CHARS[s.char];
   const cur = $menu.querySelector('#curChar');
   cur.appendChild(portrait(s.char, 64));
-  cur.insertAdjacentHTML('beforeend', `<div><b style="color:${C.color}">${C.name}</b> <small class="inl">${C.title}</small><small>${ELEMENTS[C.el].name} · ${C.role} · 눌러서 영웅 바꾸기</small></div>`);
+  cur.insertAdjacentHTML('beforeend', `<div><b style="color:${C.color}">${C.name}</b><small>${C.title} · ${ELEMENTS[C.el].name} · ${C.role}</small><small class="hint">눌러서 영웅 바꾸기</small></div>`);
   cur.addEventListener('click', () => h.go('chars'));
   $menu.querySelector('#nick').addEventListener('change', (e) => SV.setName(e.target.value.trim()));
   bind('[data-go]', (el) => { SV.setName($menu.querySelector('#nick').value.trim()); h.go(el.dataset.go); });
+  account(h);
+}
+// 계정 줄: 게스트면 구글 로그인 버튼, 구글이면 이름·저장 상태·동기화·로그아웃
+export function account(h) {
+  const el = $menu.querySelector('#acct');
+  if (!el) return;
+  const a = h.accountInfo();
+  el.innerHTML = a
+    ? `<span class="who"><span class="gdot">G</span> <b>${esc(a.name || '구글 계정')}</b> <small>${esc(a.status || '클라우드 저장 켜짐')}</small></span>
+       <button class="mini sync">지금 동기화</button><button class="mini out">로그아웃</button>`
+    : `<span class="who">👤 <b>게스트</b> <small>이 기기에만 저장돼요</small></span>
+       <button class="mini google"><span class="gdot">G</span> 구글 로그인</button>`;
+  h.preload?.();
+  const msg = (t) => toast(t);
+  bind('.google', async (b) => { b.disabled = true; try { msg(await h.google()); } catch (e) { msg(e.message); } h.refresh(); });
+  bind('.sync', async (b) => { b.disabled = true; try { msg(await h.sync()); } catch (e) { msg(e.message); } h.refresh(); });
+  bind('.out', () => { if (confirm('로그아웃할까요? (진행은 클라우드에 남아 있어요)')) { h.logout(); h.refresh(); } });
+}
+// 처음 들어왔을 때: 구글로 로그인 / 게스트로 시작
+export function login(h) {
+  show(`
+    <div class="title">
+      <div class="logo"><span class="l1">원소</span><span class="l2">아레나</span></div>
+      <p class="tag">원소를 엮어 반응을 터뜨리고, 적을 날려 버려라!</p>
+      <div class="panel small loginbox">
+        <h2>시작하기</h2>
+        <p class="sub">구글로 로그인하면 골드·영웅·스킬 트리가 클라우드에 저장돼서 태블릿·PC 어디서든 이어서 할 수 있어요.</p>
+        <div class="col">
+          <button class="big google"><span class="gdot">G</span> 구글로 로그인</button>
+          <button class="guest">게스트로 시작 (이 기기에만 저장)</button>
+        </div>
+        <p class="status" id="lst"></p>
+      </div>
+    </div>`);
+  h.preload?.();
+  bind('.google', async (b) => {
+    b.disabled = true;
+    try { toast(await h.google()); h.done(); } catch (e) { $menu.querySelector('#lst').textContent = e.message; b.disabled = false; }
+  });
+  bind('.guest', () => { h.guest(); h.done(); });
 }
 
 // ---------- 캐릭터 ----------

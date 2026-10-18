@@ -1,13 +1,17 @@
-// 저장 (이 브라우저에만)
+// 저장: 기기(localStorage)에 계정별로 따로, 구글 계정이면 클라우드에도 (cloud.js)
 import { TREE, CHARS } from './data.js';
 
-const KEY = 'elementArena.v1';
+const BASE = 'elementArena.v1';
+let account = null; // null = 게스트, 'g-<uid>' = 구글 계정
+const keyOf = (acc) => (acc ? `${BASE}:${acc}` : BASE);
+let KEY = keyOf(null);
+let onWrite = null;
 const DEF = { name: '', char: 'knight', owned: ['knight'], gold: 0, tree: [], cleared: 0, stats: { runs: 0, bestCombo: 0, kos: 0, bestLevel: 0 }, muted: false };
 let data = load();
 
-function load() {
+function load(raw) {
   try {
-    const d = JSON.parse(localStorage.getItem(KEY) || 'null');
+    const d = raw || JSON.parse(localStorage.getItem(KEY) || 'null');
     if (d) {
       const o = { ...DEF, ...d, stats: { ...DEF.stats, ...(d.stats || {}) } };
       o.owned = Array.isArray(d.owned) ? d.owned.filter((k) => CHARS[k]) : ['knight'];
@@ -18,7 +22,18 @@ function load() {
   } catch { /* 무시 */ }
   return structuredClone(DEF);
 }
-export function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* 무시 */ } }
+export function save(quiet = false) {
+  if (!quiet) data._t = Date.now();
+  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* 무시 */ }
+  if (!quiet) onWrite?.(data);
+}
+export function onSaveWrite(fn) { onWrite = fn; }
+// 계정 바꾸기: 그 계정의 기기 저장을 불러옴
+export function useAccount(acc) { account = acc || null; KEY = keyOf(account); data = load(); }
+export const currentAccount = () => account;
+export const hasLocal = (acc) => { try { return !!localStorage.getItem(keyOf(acc)); } catch { return false; } };
+// 다른 곳(클라우드·게스트 진행)에서 받은 저장으로 바꿈
+export function replaceWith(raw, t) { data = load(raw); data._t = t || raw?._t || Date.now(); save(true); }
 export const S = () => data;
 export function setName(n) { data.name = String(n || '').slice(0, 10); save(); }
 export function setChar(c) { if (CHARS[c] && data.owned.includes(c)) { data.char = c; save(); } }
