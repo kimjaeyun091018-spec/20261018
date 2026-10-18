@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0a12">
+  <title>원소 아레나</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=202610182319">
+  <script>window.__ASSET_V = '202610182319';</script>
+  <script type="importmap">
+  {
+    "imports": {
+      "./src/data.js": "./src/data.js?v=202610182319",
+      "./src/maps.js": "./src/maps.js?v=202610182319",
+      "./src/sim.js": "./src/sim.js?v=202610182319",
+      "./src/fx.js": "./src/fx.js?v=202610182319",
+      "./src/render.js": "./src/render.js?v=202610182319",
+      "./src/audio.js": "./src/audio.js?v=202610182319",
+      "./src/net.js": "./src/net.js?v=202610182319",
+      "./src/save.js": "./src/save.js?v=202610182319",
+      "./src/ui.js": "./src/ui.js?v=202610182319"
+    }
+  }
+  </script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
+</head>
+<body>
+  <div id="wrap">
+    <canvas id="game" width="960" height="640"></canvas>
+    <div id="hudTop" hidden>
+      <span id="roomCode" class="roomcode" hidden></span>
+      <button id="btnPause" class="iconbtn" title="메뉴">❚❚</button>
+    </div>
+    <div id="controls" hidden>
+      <div id="stick" class="stick"><div class="knob"></div></div>
+      <div id="skills" class="skills"></div>
+    </div>
+    <div id="menu" class="overlay"></div>
+  </div>
+  <script type="module" src="./src/main.js?v=202610182319"></script>
+</body>
+</html>
