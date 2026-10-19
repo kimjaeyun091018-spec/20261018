@@ -289,14 +289,94 @@ def portrait(key):
     return out
 
 
+# ============================================================
+#  직접 그려 온 도트 (tools/art/*.png) → 동작 만들기
+#  무기 부분만 떼어서 손잡이를 중심으로 돌리고, 다리는 번갈아 움직임
+# ============================================================
+FW = FH = 48  # 최종 칸 크기 (격자로 그린 영웅은 40 칸을 가운데에 놓음)
+
+
+def sprite_frames(key):
+    spec = HEROES[key]
+    S = spec['sprite']
+    img = Image.open(ROOT / S['file']).convert('RGBA')
+    w, h = img.size
+    px = img.load()
+    sx0, sy0 = S['weapon_from']
+    pivot = S['pivot']
+    body = Image.new('RGBA', (w, h), (0, 0, 0, 0)); bp = body.load()
+    wep = Image.new('RGBA', (w, h), (0, 0, 0, 0)); wp = wep.load()
+    for y in range(h):
+        for x in range(w):
+            if px[x, y][3] == 0:
+                continue
+            if x >= sx0 and y >= sy0:
+                wp[x, y] = px[x, y]
+            else:
+                bp[x, y] = px[x, y]
+    leg_y, leg_split = S['legs']
+    ox, oy = S.get('place', ((FW - w) // 2, FH - 2 - h))
+    A = dict(rest=0, windup=-150, strike=-25, follow=25, hurt=12, win=-115)
+
+    def compose(bob=0, lean=0, la=0, lb=0, wa=0, hurt=False):
+        f = Image.new('RGBA', (FW, FH), (0, 0, 0, 0))
+        # 몸: 다리 줄 위만 흔들림
+        top = body.crop((0, 0, w, leg_y))
+        f.alpha_composite(top, (ox + lean, oy + bob))
+        for side, ph in ((0, lb), (1, la)):
+            x0, x1 = (0, leg_split) if side == 0 else (leg_split, w)
+            leg = body.crop((x0, leg_y, x1, h))
+            lift = 1 if ph > 0 else 0
+            f.alpha_composite(leg, (ox + x0 + ph + lean // 2, oy + leg_y - lift))
+        r, (cx, cy) = rotated(wep, pivot, wa)
+        f.alpha_composite(r, (ox + lean - cx + pivot[0], oy + bob - cy + pivot[1]))
+        return f
+
+    frames = []
+    for i in range(16):
+        if i < 4:
+            frames.append(compose(bob=[0, 0, 1, 1][i], wa=[0, 2, 3, 1][i]))
+        elif i < 10:
+            k = (i - 4) / 6 * math.tau
+            la = round(math.sin(k) * 1.6)
+            frames.append(compose(bob=1 if (i - 4) % 3 == 0 else 0, lean=0, la=la, lb=-la, wa=round(math.sin(k) * 5)))
+        elif i == 10:
+            frames.append(compose(lean=-1, wa=A['windup']))
+        elif i == 11:
+            frames.append(compose(lean=2, wa=A['strike']))
+        elif i == 12:
+            frames.append(compose(lean=1, wa=A['follow']))
+        elif i == 13:
+            frames.append(compose(lean=-2, bob=1, wa=A['hurt']))
+        elif i == 14:
+            idle = compose()
+            out = Image.new('RGBA', (FW, FH), (0, 0, 0, 0))
+            out.alpha_composite(idle.rotate(90, resample=Image.NEAREST), (0, 10))
+            frames.append(out)
+        else:
+            frames.append(compose(bob=-1, wa=A['win']))
+    # 얼굴 그림: 머리 부분을 3배로
+    hx0, hy0, hs = S['face']
+    crop = img.crop((hx0, hy0, hx0 + hs, hy0 + hs)).resize((hs * 3, hs * 3), Image.NEAREST)
+    port = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
+    port.alpha_composite(crop, ((64 - hs * 3) // 2, 64 - hs * 3))
+    return frames, port
+
+
 def main():
-    sheet = Image.new('RGBA', (W * FRAMES, H * len(ORDER)), (0, 0, 0, 0))
+    sheet = Image.new('RGBA', (FW * FRAMES, FH * len(ORDER)), (0, 0, 0, 0))
     ports = Image.new('RGBA', (64 * len(ORDER), 64), (0, 0, 0, 0))
     for r, key in enumerate(ORDER):
         if key not in HEROES:
             continue
+        if 'sprite' in HEROES[key]:
+            frames, port = sprite_frames(key)
+            for i, fr in enumerate(frames):
+                sheet.alpha_composite(fr, (i * FW, r * FH))
+            ports.alpha_composite(port, (r * 64, 0))
+            continue
         for i in range(FRAMES):
-            sheet.alpha_composite(dead_frame(key) if i == 14 else draw_frame(key, i), (i * W, r * H))
+            sheet.alpha_composite(dead_frame(key) if i == 14 else draw_frame(key, i), (i * FW + (FW - W) // 2, r * FH + (FH - H)))
         ports.alpha_composite(portrait(key), (r * 64, 0))
     sheet.save(ROOT / 'assets' / 'heroes.png')
     ports.save(ROOT / 'assets' / 'portraits.png')

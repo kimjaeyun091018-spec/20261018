@@ -294,7 +294,7 @@ export function createRenderer(canvas) {
     ctx.translate(x, y - lift);
     if (flip) ctx.scale(-1, 1);
     if (scale !== 1) ctx.scale(scale, scale);
-    if (ready(sheet)) ctx.drawImage(white ? whiteOf(sheet) : sheet, frame * HS, C.row * HS, HS, HS, -HD / 2, -HD * 0.75, HD, HD);
+    if (ready(sheet)) ctx.drawImage(white ? whiteOf(sheet) : sheet, frame * HS, C.row * HS, HS, HS, -HD / 2, -HD * 0.792, HD, HD);
     else { ctx.fillStyle = C.color; ctx.fillRect(-10, -26, 20, 30); }
     ctx.restore();
   }

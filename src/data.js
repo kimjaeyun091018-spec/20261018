@@ -219,10 +219,10 @@ export const CHARS = {
   },
 };
 export const CHAR_KEYS = Object.keys(CHARS);
-// 영웅 그림: assets/heroes.png 한 칸 40x40, 한 줄 = 한 캐릭터
+// 영웅 그림: assets/heroes.png 한 칸 48x48 (발끝 46행), 한 줄 = 한 캐릭터
 //  0-3 서기 · 4-9 걷기 · 10 준비 · 11 공격 · 12 마무리 · 13 맞음 · 14 쓰러짐 · 15 승리
 // assets/portraits.png 한 칸 64x64 (캐릭터 순서대로 가로)
-export const HERO_SPRITE = { size: 40, draw: 60, frames: 16, portrait: 64 };
+export const HERO_SPRITE = { size: 48, draw: 72, frames: 16, portrait: 64 };
 
 // ---------- 적 (assets/enemies.png 24x24: 종류마다 [걷기1, 걷기2, 쓰러짐]) ----------
 export const ENEMY_SHEET = ['slime', 'archer', 'brute', 'bat', 'spider', 'bomber', 'caster', 'shield', 'totem'];

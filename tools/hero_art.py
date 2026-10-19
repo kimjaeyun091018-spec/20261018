@@ -105,6 +105,8 @@ HEROES['knight'] = dict(
         '...g................',
     ], pivot=(1, 2)),
     kind='melee', legs=('p', 'o', 'O'), arm='a', glove='a',
+    # 직접 그려 온 도트 (tools/art/src/knight.png → tools/import_sprite.py → tools/art/knight.png)
+    sprite=dict(file='tools/art/knight.png', weapon_from=(29, 26), pivot=(26, 29), legs=(34, 22), face=(11, 2, 22)),
 )
 
 # =====================================================================
