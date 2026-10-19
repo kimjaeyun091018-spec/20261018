@@ -267,7 +267,7 @@ async function startGame(cfg) {
   const run = cfg.mode === 'story' && cfg.resume ? SV.getRun() : null;
   if (run && SV.owns(run.char)) SV.setChar(run.char);
   if (cfg.mode === 'story' && !run) SV.setRun(null);
-  const state = SIM.createState(cfg.mode, myId, run ? { ...cfg, ch: run.ch, st: run.st } : cfg);
+  const state = SIM.createState(cfg.mode, myId, run ? { ...cfg, ch: run.ch, st: run.st, map: run.map } : cfg);
   SIM.addHero(state, myId, me.name || '나', me.char, heroOpts(cfg, 0));
   if (run) SIM.restoreHero(state, myId, run);
   if (cfg.mode === 'colosseum' && !cfg.online) {
@@ -524,7 +524,7 @@ function pickAug(i) {
 // 참가자: 받은 두 상태 사이를 부드럽게 이어 그림
 function interpolate(g, now) {
   const a = g.prev, b = g.snap;
-  if (!a || a.mk !== b.mk) return b;
+  if (!a || a.mk !== b.mk || a.rid !== b.rid) return b;
   const k = clamp((now - g.recvT) / g.interval, 0, 1);
   const lerp = (x, y) => x + (y - x) * k;
   const lerpA = (x, y) => { let d = y - x; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return x + d * k; };

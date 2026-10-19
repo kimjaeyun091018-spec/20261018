@@ -78,7 +78,7 @@ export function createState(mode, hostId, opt = {}) {
     xp: 0, level: 1, kills: 0,
     story: null, colo: null, opt,
   };
-  if (mode === 'story') startStage(s, opt.ch || 0, opt.st || 0);
+  if (mode === 'story') startStage(s, opt.ch || 0, opt.st || 0, opt.map);
   else startColosseum(s, opt.arena || 0);
   return s;
 }
@@ -1597,9 +1597,12 @@ function updateSnowHead(s, e, dt) {
 // ============================================================
 //  스토리 모드
 // ============================================================
-export function startStage(s, ch, st) {
+export function startStage(s, ch, st, preset = null) {
   const boss = st === STAGES_PER_CHAPTER - 1;
-  const gen = genStoryMap(ch, boss); // 벽·구덩이·가시 무작위
+  // 벽·구덩이·가시 무작위 (이어하기면 저장해 둔 그 지도 그대로)
+  const ok = preset?.rows?.length === ROWS && preset.rows.every((r) => typeof r === 'string' && r.length === COLS) && preset.fp;
+  const gen = ok ? { rows: preset.rows, fp: preset.fp } : genStoryMap(ch, boss);
+  s.stageMap = gen;
   s.map = parseMap(gen.rows);
   s.stageN = (s.stageN || 0) + 1;
   s.mapKey = `${boss ? 'B' : 'S'}${s.stageN}-${ch}`;
@@ -1869,7 +1872,7 @@ export function runSummary(s, id) {
     else if (ch + 1 < CHAPTERS.length) { ch++; st = 0; }
     else return null;
   }
-  return { ch, st, char: h.char, augs: [...h.augs], stocks: Math.max(1, h.alive || h.stocks > 0 ? h.stocks : 1), pendingAug, t: Date.now() };
+  return { ch, st, map: S.cleared ? null : s.stageMap, char: h.char, augs: [...h.augs], stocks: Math.max(1, h.alive || h.stocks > 0 ? h.stocks : 1), pendingAug, t: Date.now() };
 }
 // ---------- 스킬 미리보기 (영웅 화면) ----------
 export function createDemo(char) {

@@ -876,7 +876,7 @@ export function createRenderer(canvas) {
     const bigWarn = warns.find((w) => w[4]);
     const warnT = bigWarn ? bigWarn[0] : 0;
     if (snap.mk && snap.mp) {
-      const key = snap.mk + '|' + snap.mv;
+      const key = snap.rid + '|' + snap.mk + '|' + snap.mv;
       if (!mapCache.has(key)) { if (mapCache.size > 24) mapCache.clear(); mapCache.set(key, buildMap(snap.mp, snap.mk)); }
       curMap = mapCache.get(key);
       ctx.drawImage(curMap.c, 0, 0);
@@ -1046,7 +1046,7 @@ export function createRenderer(canvas) {
   }
   function updateCam(snap, dt, opt) {
     if (opt.fixedCam || !snap.mp) { cam.x = VIEW_W / 2; cam.y = VIEW_H / 2; cam.z = 1; return; }
-    const key = snap.mk + '|' + snap.mv;
+    const key = snap.rid + '|' + snap.mk + '|' + snap.mv;
     if (key !== cam.key) { cam.key = key; cam.box = mapBox(snap.mp); if (cam.reset !== snap.mk) { cam.reset = snap.mk; cam.snap = true; } }
     const B = cam.box;
     let tz = 1, tx = VIEW_W / 2, ty = VIEW_H / 2;
