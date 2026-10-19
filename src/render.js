@@ -991,9 +991,24 @@ export function createRenderer(canvas) {
     for (const b of bodies) b.d();
     drawReticle(snap, opt.target, now, dt);
     P.draw(ctx, 'normal');
-    // 투사체 테두리: 적은 빨강, 아군(우리 팀)은 파랑
     const myTeam = snap.h.find((h) => h.id === me)?.tm ?? 1;
-    for (const sh of snap.s) drawShot(ctx, sh, now, P, dt);
+    // 투사체 색: 적은 빨강 계열, 아군은 파랑 계열로 물들여 그림 (편마다 따로 그린 뒤 색을 입혀 합침)
+    for (const foe of [true, false]) {
+      const list = snap.s.filter((sh) => { const tm = sh[9]; return (tm !== undefined ? tm !== myTeam : !!sh[8]) === foe; });
+      if (!list.length) continue;
+      const L = shotLayer(foe ? 0 : 1);
+      L.g.setTransform(1, 0, 0, 1, 0, 0); L.g.globalCompositeOperation = 'source-over'; L.g.globalAlpha = 1;
+      L.g.clearRect(0, 0, L.c.width, L.c.height);
+      L.g.setTransform(ctx.getTransform());
+      // 꼬리 입자도 같은 계열 색으로
+      const pal = foe ? ['#ff5252', '#ff8a80', '#d50000'] : ['#448aff', '#82b1ff', '#2962ff'];
+      const TP = { add: (o) => P.add({ ...o, color: pal[(Math.random() * 3) | 0] }) };
+      for (const sh of list) drawShot(L.g, sh, now, TP, dt);
+      L.g.setTransform(1, 0, 0, 1, 0, 0);
+      L.g.globalCompositeOperation = 'source-atop'; L.g.globalAlpha = 1;
+      L.g.fillStyle = foe ? 'rgba(255,40,40,.72)' : 'rgba(40,140,255,.72)'; L.g.fillRect(0, 0, L.c.width, L.c.height);
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(L.c, 0, 0); ctx.restore();
+    }
     ctx.save();
     for (const sh of snap.s) {
       const [, look, x, y, , r, , zz = 0, , tm] = sh;
@@ -1099,6 +1114,12 @@ export function createRenderer(canvas) {
   function applyCam() { ctx.translate(VIEW_W / 2, VIEW_H / 2); ctx.scale(cam.z, cam.z); ctx.translate(-cam.x, -cam.y); }
   // 화면 좌표 → 세계 좌표 (마우스 조준용)
   function toWorld(x, y) { return { x: (x - VIEW_W / 2) / cam.z + cam.x, y: (y - VIEW_H / 2) / cam.z + cam.y }; }
+  const layers = [];
+  function shotLayer(i) {
+    const W = canvas.width, H = canvas.height;
+    if (!layers[i] || layers[i].c.width !== W || layers[i].c.height !== H) { const c = document.createElement('canvas'); c.width = W; c.height = H; layers[i] = { c, g: c.getContext('2d') }; }
+    return layers[i];
+  }
   function drawVoidTile(x, y, now) {
     if (!nebula) nebula = buildNebula();
     ctx.drawImage(nebula, x * TILE, y * TILE, TILE, TILE, x * TILE, y * TILE, TILE, TILE);
