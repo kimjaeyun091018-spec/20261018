@@ -60,38 +60,74 @@ function bind(sel, fn) { $menu.querySelectorAll(sel).forEach((el) => el.addEvent
 const SKILL_KEYS = ['클릭/J', 'Q/K', 'E/L', 'R/;'];
 const TYPE_NAME = { slash: '근접', shot: '투사체', dashstrike: '돌진', stream: '줄기', blink: '이동', nova: '광역', zone: '지대', line: '연속', snipe: '저격', markall: '표식', detonate: '기폭', strikes: '낙뢰' };
 
-// ---------- 타이틀 ----------
-export function title(h) {
-  const s = SV.S();
+// ---------- 1. 시작 화면: 로고 + "눌러서 시작" ----------
+export function start(h) {
   show(`
-    <div class="title">
-      <div class="logo"><span class="l1">원소</span><span class="l2">아레나</span></div>
+    <div class="start">
+      <div class="logo big"><span class="l1">원소</span><span class="l2">아레나</span></div>
       <p class="tag">원소를 엮어 반응을 터뜨리고, 적을 날려 버려라!</p>
-      <div class="namerow">
-        <input id="nick" maxlength="10" placeholder="닉네임" value="${esc(s.name)}">
-        <span class="gold">💰 ${s.gold} G</span>
+      <p class="press">화면을 눌러 시작</p>
+      <p class="ver">ELEMENT ARENA · ${String(window.__ASSET_V || '').slice(0, 8)}</p>
+    </div>`);
+  $menu.classList.add('startbg');
+  let gone = false;
+  const go = (e) => {
+    if (gone) return;
+    gone = true;
+    e?.preventDefault?.();
+    removeEventListener('keydown', go);
+    $menu.classList.remove('startbg');
+    sfx('ui');
+    h.started();
+  };
+  $menu.querySelector('.start').addEventListener('pointerdown', go);
+  addEventListener('keydown', go);
+}
+
+// ---------- 3. 로비: 계정 · 영웅 · 모드 ----------
+export function lobby(h) {
+  const s = SV.S();
+  const C = CHARS[s.char], E = ELEMENTS[C.el];
+  const a = h.accountInfo();
+  show(`
+    <div class="lobby">
+      <header class="lbar">
+        <div class="logo small"><span class="l1">원소</span><span class="l2">아레나</span></div>
+        <div class="lstat">
+          <span class="gold">💰 ${s.gold} G</span>
+          <span class="lvchip">🏆 ${s.cleared}장 클리어</span>
+          <button class="achip" data-act="acct">${a ? `<span class="gdot">G</span> ${esc(a.name || '구글 계정')}` : '👤 게스트'}</button>
+        </div>
+      </header>
+      <div class="lmain">
+        <section class="showcase" style="--c:${C.color}">
+          <div class="stage"><div class="bustslot big"></div></div>
+          <div class="sinfo">
+            <div class="hero-name"><b>${C.name}</b> <span class="ctitle">${C.title}</span></div>
+            <div class="hero-tags"><span class="badge" style="background:${E.color}">${E.name}</span> <span class="role">${C.role}</span></div>
+            <p class="quote">“${C.quote}”</p>
+            <div class="namerow"><label>닉네임</label><input id="nick" maxlength="10" placeholder="닉네임" value="${esc(s.name)}"></div>
+            <button class="swap" data-go="chars">영웅 바꾸기 (${s.owned.length}/${CHAR_KEYS.length})</button>
+          </div>
+        </section>
+        <section class="modes">
+          <button class="big story" data-go="story"><b>스토리 모드</b><small>스테이지 돌파 · 레벨 업 증강 · 최대 4명 협동</small></button>
+          <button class="big colo" data-go="colo"><b>콜로세움</b><small>친구·봇과 대난투식 대전 · 날려서 링아웃</small></button>
+          <div class="rowbtns">
+            <button data-go="tree">🌳 스킬 트리</button>
+            <button data-go="join">🔗 코드로 참가</button>
+            <button data-go="guide">📖 도움말</button>
+          </div>
+          <div class="acct" id="acct"></div>
+        </section>
       </div>
-      <div class="cur" id="curChar"></div>
-      <div class="bigbtns">
-        <button class="big story" data-go="story"><b>스토리 모드</b><small>스테이지를 돌파하고 골드 모으기 · 최대 4명 협동</small></button>
-        <button class="big colo" data-go="colo"><b>콜로세움</b><small>친구·봇과 대난투식 대전 · 날려서 링아웃</small></button>
-      </div>
-      <div class="rowbtns">
-        <button data-go="chars">영웅 (${SV.S().owned.length}/${CHAR_KEYS.length})</button>
-        <button data-go="tree">스킬 트리</button>
-        <button data-go="join">코드로 참가</button>
-        <button data-go="guide">도움말</button>
-      </div>
-      <div class="acct" id="acct"></div>
       <p class="foot">PC: WASD 이동 · 마우스 조준 · 클릭 공격 · Q E R 스킬 · Space 대시 &nbsp;|&nbsp; 모바일: 왼쪽 조이스틱 · 오른쪽 버튼 (자동 조준)</p>
     </div>`);
-  const C = CHARS[s.char];
-  const cur = $menu.querySelector('#curChar');
-  cur.appendChild(portrait(s.char, 64));
-  cur.insertAdjacentHTML('beforeend', `<div><b style="color:${C.color}">${C.name}</b><small>${C.title} · ${ELEMENTS[C.el].name} · ${C.role}</small><small class="hint">눌러서 영웅 바꾸기</small></div>`);
-  cur.addEventListener('click', () => h.go('chars'));
-  $menu.querySelector('#nick').addEventListener('change', (e) => SV.setName(e.target.value.trim()));
-  bind('[data-go]', (el) => { SV.setName($menu.querySelector('#nick').value.trim()); h.go(el.dataset.go); });
+  $menu.querySelector('.bustslot').appendChild(portrait(s.char, 160, true));
+  const nick = $menu.querySelector('#nick');
+  nick.addEventListener('change', () => SV.setName(nick.value.trim()));
+  bind('[data-go]', (el) => { SV.setName(nick.value.trim()); h.go(el.dataset.go); });
+  bind('[data-act=acct]', () => $menu.querySelector('#acct').scrollIntoView({ behavior: 'smooth', block: 'center' }));
   account(h);
 }
 // 계정 줄: 게스트면 구글 로그인 버튼, 구글이면 이름·저장 상태·동기화·로그아웃
@@ -111,21 +147,23 @@ export function account(h) {
   bind('.out', () => { if (confirm('로그아웃할까요? (진행은 클라우드에 남아 있어요)')) { h.logout(); h.refresh(); } });
 }
 // 처음 들어왔을 때: 구글로 로그인 / 게스트로 시작
+// ---------- 2. 로그인 메뉴 ----------
 export function login(h) {
   show(`
-    <div class="title">
+    <div class="loginwrap">
       <div class="logo"><span class="l1">원소</span><span class="l2">아레나</span></div>
-      <p class="tag">원소를 엮어 반응을 터뜨리고, 적을 날려 버려라!</p>
       <div class="panel small loginbox">
-        <h2>시작하기</h2>
+        <h2>로그인</h2>
         <p class="sub">구글로 로그인하면 골드·영웅·스킬 트리가 클라우드에 저장돼서 태블릿·PC 어디서든 이어서 할 수 있어요.</p>
         <div class="col">
           <button class="big google"><span class="gdot">G</span> 구글로 로그인</button>
           <button class="guest">게스트로 시작 (이 기기에만 저장)</button>
         </div>
         <p class="status" id="lst"></p>
+        <button class="linkbtn back">← 처음 화면으로</button>
       </div>
     </div>`);
+  bind('.back', () => h.toStart());
   h.preload?.();
   bind('.google', async (b) => {
     b.disabled = true;

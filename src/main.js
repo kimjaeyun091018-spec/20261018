@@ -27,7 +27,7 @@ let game = null; // { role: 'solo'|'host'|'client', state, myId, room, conn, cfg
 const history = [];
 const handlers = {
   go(name) { history.push(name); UI[name](handlers); },
-  back() { history.pop(); const p = history[history.length - 1] || 'title'; UI[p](handlers); },
+  back() { history.pop(); const p = history[history.length - 1] || 'lobby'; UI[p](handlers); },
   start: (cfg) => startGame(cfg),
   join: (code, status) => joinGame(code, status),
   resume() { if (game) { game.paused = false; UI.hide(); } },
@@ -37,18 +37,18 @@ const handlers = {
   retry() { quitGame(true); startGame(game_last); },
 };
 let game_last = null;
-function toMenu() { history.length = 0; history.push('title'); UI.title(handlers); }
+function toMenu() { history.length = 0; history.push('lobby'); UI.lobby(handlers); }
 
 // ---------- 구글 계정 · 클라우드 저장 ----------
 const SEEN_KEY = 'elementArena.started';
 let gAcc = savedAccount(); // { uid, name, email } 또는 null
 if (gAcc) SV.useAccount(`g-${gAcc.uid}`);
 SV.onSaveWrite((d) => { if (gAcc) queuePush(gAcc.uid, d); });
-onCloudStatus(() => { if (!game && history[history.length - 1] === 'title') UI.account(handlers); });
+onCloudStatus(() => { if (!game && history[history.length - 1] === 'lobby') UI.account(handlers); });
 Object.assign(handlers, {
   accountInfo: () => (gAcc ? { name: gAcc.name, status: cloudStatus() } : null),
   preload: () => { preloadGoogle().catch(() => {}); },
-  refresh: () => { if (!game) toMenu(); },
+  refresh: () => { if (game) return; if (!gAcc && !localStorage.getItem(SEEN_KEY)) UI.login(handlers); else toMenu(); },
   async google() {
     let r;
     try { r = await googleSignIn(); } catch (e) { throw new Error(googleError(e)); }
@@ -77,10 +77,13 @@ Object.assign(handlers, {
     await flushPush();
     return cloudStatus() || '클라우드에 저장했어요';
   },
-  logout() { flushPush(); signOut(); gAcc = null; SV.useAccount(null); },
+  logout() { flushPush(); signOut(); gAcc = null; SV.useAccount(null); try { localStorage.removeItem(SEEN_KEY); } catch { /* 무시 */ } },
+  // 시작 화면을 누르면: 로그인한 적이 있으면 로비, 아니면 로그인 메뉴
+  started() { if (gAcc || localStorage.getItem(SEEN_KEY)) toMenu(); else { history.length = 0; UI.login(handlers); } },
+  toStart() { history.length = 0; UI.start(handlers); },
 });
 // 다시 들어왔을 때: 다른 기기에서 한 진행이 더 최근이면 받아 옴
-if (gAcc) handlers.sync().then(() => { if (!game) toMenu(); }).catch((e) => console.warn('클라우드 불러오기 실패', e));
+if (gAcc) handlers.sync().then(() => { if (!game && history[history.length - 1] === 'lobby') toMenu(); }).catch((e) => console.warn('클라우드 불러오기 실패', e));
 
 // ---------- 입력 ----------
 const keys = new Set();
@@ -434,9 +437,9 @@ function drawMenuBackdrop(now) {
   else R.render(SIM.snapshot(backdrop), null, { shakeMul: 0.3, noHud: true });
 }
 
-let firstVisit = false;
-try { firstVisit = !gAcc && !localStorage.getItem(SEEN_KEY) && !SV.hasLocal(null); } catch { /* 무시 */ }
-if (firstVisit) UI.login(handlers); else toMenu();
+// 예전에 게스트로 하던 사람은 로그인 메뉴를 건너뜀
+try { if (!gAcc && SV.hasLocal(null) && !localStorage.getItem(SEEN_KEY)) localStorage.setItem(SEEN_KEY, '1'); } catch { /* 무시 */ }
+UI.start(handlers);
 requestAnimationFrame(frame);
 // 디버그·테스트용
 window.__ea = { get game() { return game; }, SIM, SV, startGame, quitGame };
