@@ -907,7 +907,7 @@ function heroAugTick(s, h, dt) {
       if (t && dist(t, h) < 520) {
         h.meteorT = 7;
         s.pending.push({ t: 0.8, do: 'meteor', x: t.x, y: t.y, team: h.team, owner: h.id });
-        fxPush(s, { k: 'warn', x: t.x, y: t.y, r: 80, t: 0.8, el: 'fire' });
+        fxPush(s, { k: 'warn', x: t.x, y: t.y, r: 80, t: 0.8, el: 'fire', ally: true }); // 아군 운석: 파란 표시
         fxPush(s, { k: 'meteorfall', x: t.x, y: t.y, t: 0.8 });
       } else h.meteorT = 1;
     }
@@ -1663,6 +1663,7 @@ function updateStory(s, dt) {
     if (alive > 0) return;
     if (S.wave + 1 < S.totalWaves) { S.wave++; spawnWave(s); return; }
     S.phase = 'clear'; S.cleared = true;
+    s.clears = (s.clears || 0) + 1; if (S.boss) s.bossClears = (s.bossClears || 0) + 1;
     raiseCore(s);
     s.hazards = [];
     S.chest = { x: VIEW_CENTER.x, y: VIEW_CENTER.y + 90, open: false, big: S.boss };

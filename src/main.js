@@ -1,13 +1,14 @@
 // ============================================================
 //  원소 아레나 — 시작점: 메뉴 ↔ 게임, 입력, 방장/참가자 네트워크
 // ============================================================
-import { CHARS, VIEW_W, VIEW_H, MAX_PLAYERS, COLOSSEUM, CHAPTERS } from './data.js';
+import { CHARS, VIEW_W, VIEW_H, MAX_PLAYERS, COLOSSEUM, CHAPTERS, ACCOUNT } from './data.js';
 import * as SIM from './sim.js';
 import { createRenderer } from './render.js';
 import { initAudio, fxSound, setMuted as audioMute, sfx } from './audio.js';
 import * as NET from './net.js';
 import * as SV from './save.js';
 import * as UI from './ui.js';
+import * as SO from './social.js';
 import { preloadGoogle, googleSignIn, googleError, signOut, savedAccount, pullSave, queuePush, flushPush, cloudStatus, onCloudStatus, myNick, nickOwner, claimNick, NICK_RULE } from './cloud.js';
 
 const canvas = document.getElementById('game');
@@ -34,6 +35,7 @@ const handlers = {
   mute() { const m = !SV.S().muted; SV.setMuted(m); audioMute(m); UI.pause(handlers, { code: game?.room?.code || game?.code, muted: m }); },
   quit: () => quitGame(),
   setMute(m) { SV.setMuted(m); audioMute(m); },
+  joinCode(code) { joinGame(code, (t) => UI.toast(t)); },
   onLayout() { applyLayout(); },
   next() { const cfg = { ...game_last, ch: game.cfg.ch + 1 }; quitGame(true); startGame(cfg); },
   retry() { quitGame(true); startGame(game_last); },
@@ -44,6 +46,13 @@ function toMenu() {
   // 구글 계정인데 닉네임을 아직 안 정했으면 먼저 정하기
   if (gAcc && !gAcc.nick) { UI.nickname(handlers, { first: true }); return; }
   history.push('lobby'); UI.lobby(handlers);
+  presence();
+}
+// 접속 표시: 구글 계정 + 닉네임이 있으면 1분마다 신호
+function presence(room = null) {
+  if (!gAcc?.nick) { SO.stopPresence(); return; }
+  const s = SV.S();
+  SO.startPresence({ nick: gAcc.nick, alv: s.alv || 1, char: s.char, room });
 }
 
 // ---------- 구글 계정 · 클라우드 저장 ----------
@@ -92,7 +101,7 @@ Object.assign(handlers, {
     await flushPush();
     return cloudStatus() || '클라우드에 저장했어요';
   },
-  logout() { flushPush(); signOut(); gAcc = null; SV.useAccount(null); try { localStorage.removeItem(SEEN_KEY); } catch { /* 무시 */ } },
+  logout() { SO.stopPresence(); flushPush(); signOut(); gAcc = null; SV.useAccount(null); try { localStorage.removeItem(SEEN_KEY); } catch { /* 무시 */ } },
   // 시작 화면을 누르면: 로그인한 적이 있으면 로비, 아니면 로그인 메뉴
   started() { if (gAcc || localStorage.getItem(SEEN_KEY)) toMenu(); else { history.length = 0; UI.login(handlers); } },
   toStart() { history.length = 0; UI.start(handlers); },
@@ -284,6 +293,7 @@ async function startGame(cfg) {
       });
       $code.textContent = `방 코드 ${code}`; $code.hidden = false;
       game.code = code;
+      presence(code);
       UI.toast(`방 코드: ${code} — 친구에게 알려 주세요`);
     } catch (err) {
       UI.toast(`방을 만들지 못했어요: ${NET.describeError(err)} (혼자 계속합니다)`);
@@ -305,6 +315,7 @@ async function joinGame(code, status) {
         const now = performance.now();
         if (g.snap) { g.interval = clamp(now - g.recvT, 30, 120); }
         // 지도는 바뀔 때·가끔만 옴 → 받아 둔 것을 채워 넣음
+        if (m.s.sto?.cl) { const k = `${m.s.sto.ch}-${m.s.sto.st}`; if (k !== g.lastClear) { g.lastClear = k; g.cxp = (g.cxp || 0) + (m.s.sto.boss ? ACCOUNT.xp.stage + ACCOUNT.xp.boss : ACCOUNT.xp.stage); } }
         if (m.s.mp) g.mapRows = { v: m.s.mv, rows: m.s.mp };
         else if (g.mapRows) { m.s.mp = g.mapRows.rows; m.s.mv = g.mapRows.v; }
         g.prev = g.snap; g.snap = m.s; g.recvT = now;
@@ -333,7 +344,9 @@ function enterPlay(char) {
 function quitGame(keepCfg = false) {
   if (!game) return toMenu();
   saveRun(game);
-  settle(game);
+  const already = game.settled;
+  const r = settle(game);
+  if (!already) rewardToast(r);
   game.room?.close(); game.conn?.close();
   game = null;
   $controls.hidden = true; $hudTop.hidden = true; $code.hidden = true;
@@ -347,14 +360,41 @@ function saveRun(g) {
   if (r) SV.setRun(r);
 }
 // 판 정산: 스토리 골드를 저장
+// 보상: 계정 경험치 · 보스 열쇠 · 처음 도달한 스테이지 보상
 function settle(g) {
-  if (g.settled) return;
+  if (g.settled) return g.rewards;
   g.settled = true;
-  if (g.role === 'client') return; // 참가자는 받을 때마다 저장함
+  const out = { xp: 0, ups: [], reach: [], keys: 0 };
+  if (g.role === 'client') { // 참가자: 골드는 받을 때마다 저장, 경험치는 깬 스테이지만큼
+    out.xp = g.cxp || 0; out.ups = SV.addXp(out.xp);
+    g.rewards = out; return out;
+  }
   const s = g.state;
-  if (s.mode === 'story' && s.gold > 0) SV.addGold(s.gold);
   const me = s.heroes[g.myId];
+  if (s.mode === 'story') {
+    if (s.gold > 0) SV.addGold(s.gold);
+    out.xp = (s.clears || 0) * ACCOUNT.xp.stage + (s.bossClears || 0) * ACCOUNT.xp.boss;
+    out.keys = (s.bossClears || 0) * ACCOUNT.bossKeys;
+    if (out.keys) SV.addKeys(out.keys);
+    const S = s.story;
+    const reached = S.ch * 5 + S.st + 1 + (S.phase === 'done' || S.cleared ? 1 : 0);
+    out.reach = SV.reachRewards(reached);
+    SV.stat('kills', s.kills || 0);
+  } else out.xp = g.coloXp || 0;
+  out.ups = SV.addXp(out.xp);
   if (me) { SV.stat('bestCombo', me.maxCombo, true); SV.stat('runs', 1); }
+  g.rewards = out;
+  return out;
+}
+// 나가거나 끝났을 때 받은 보상을 짧게 알림
+function rewardToast(r) {
+  if (!r) return;
+  const parts = [];
+  if (r.xp) parts.push(`경험치 +${r.xp}`);
+  if (r.keys) parts.push(`🔑 +${r.keys}`);
+  for (const x of r.reach) parts.push(`첫 도달 보상 🔑${x.keys} 💰${x.gold}`);
+  for (const u of r.ups) parts.push(`계정 Lv ${u.lv}! 🔑${u.keys} 💰${u.gold}`);
+  if (parts.length) UI.toast(parts.join(' · '));
 }
 function togglePause() {
   if (!game) return;
@@ -376,23 +416,25 @@ function checkEnd() {
     // 도달한 곳 (1-1 = 1 … 4-5 = 20, 끝까지 깨면 21)
     const reached = s.story.ch * 5 + s.story.st + 1 + (win ? 1 : 0);
     const prevBest = SV.S().stats.best || 0;
-    SV.stat('best', reached, true);
     if (win) { SV.stat('wins', 1); SV.clearChapter(CHAPTERS.length - 1); }
     else SV.clearChapter(Math.max(-1, s.story.ch - 1));
     const gold = s.gold;
-    settle(g);
+    const rw = settle(g);
     const me = s.heroes[g.myId];
     SV.stat('bestLevel', s.level, true);
     UI.hideAug();
     const where = `${s.story.ch + 1}-${s.story.st + 1}`;
-    UI.result(handlers, { win, title: win ? '모험 완료!' : `${where}에서 전멸…`, gold, combo: me?.maxCombo || 0, augs: me?.augs || [], retry: true,
+    UI.result(handlers, { win, title: win ? '모험 완료!' : `${where}에서 전멸…`, gold, combo: me?.maxCombo || 0, augs: me?.augs || [], retry: true, rewards: rw,
       note: (reached > prevBest && !win ? '🏆 최고 기록 갱신! ' : '') + (win ? '모든 장을 돌파했어요! 골드로 새 영웅을 영입해 다시 도전해 보세요.' : '모은 골드는 그대로 받습니다. 다음 모험은 다시 1-1부터!') });
   }
   // 콜로세움: 봇 상대로 이기면 골드 (판마다 한 번)
   if (s.mode === 'colosseum' && s.colo.over && !g.coloPaid) {
     g.coloPaid = true;
     const me = s.heroes[g.myId];
-    if (me && me.team === s.colo.winTeam) { SV.addGold(COLOSSEUM.winGold); UI.toast(`승리 보상 +${COLOSSEUM.winGold} G`); }
+    const won = me && me.team === s.colo.winTeam;
+    g.coloXp = (g.coloXp || 0) + ACCOUNT.xp.coloGame + (won ? ACCOUNT.xp.coloWin : 0);
+    if (me) SV.stat('kos', me.kos || 0);
+    if (won) { SV.addGold(COLOSSEUM.winGold); SV.stat('coloWins', 1); UI.toast(`승리 보상 +${COLOSSEUM.winGold} G · 경험치 +${ACCOUNT.xp.coloGame + ACCOUNT.xp.coloWin}`); }
   }
   if (s.mode === 'colosseum' && !s.colo.over) g.coloPaid = false;
 }

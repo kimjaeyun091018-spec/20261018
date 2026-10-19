@@ -405,3 +405,47 @@ button.big.lvup:disabled { opacity: .5; }
 .sdtabs button { font-size: 11px; padding: 6px 4px; line-height: 1.3; }
 .sdtabs button b { font-size: 12px; }
 .sdtabs button.on { border-color: var(--c); background: #3a2f6c; box-shadow: 0 0 10px -3px var(--c); }
+
+/* 계정 레벨 · 열쇠 · 업적 · 보상 */
+.keys { color: #ffe082; font-weight: 900; }
+.alv { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 6px; border-radius: 8px; background: rgba(124, 77, 255, .2); border: 1px solid #7c4dff; min-width: 64px; }
+.alv b { color: #b388ff; font-size: 13px; }
+.alv i { position: absolute; left: 4px; bottom: 2px; height: 3px; border-radius: 2px; background: linear-gradient(90deg, #7c4dff, #00e5ff); }
+.rowbtns .dot { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: #ff5252; color: #fff; font-size: 11px; font-weight: 900; }
+.achs { display: flex; flex-direction: column; gap: 6px; max-height: 62vh; overflow-y: auto; }
+.ach { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); }
+.ach.ready { border-color: #ffd54f; box-shadow: 0 0 14px -6px #ffd54f; }
+.ach.got { opacity: .55; }
+.ach .aic { font-size: 26px; width: 36px; text-align: center; }
+.ach .ainfo { flex: 1; min-width: 0; } .ach .ainfo small { display: block; color: var(--sub); font-size: 12px; }
+.abar { position: relative; height: 14px; border-radius: 7px; background: rgba(255, 255, 255, .08); overflow: hidden; margin-top: 4px; }
+.abar i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #7c4dff, #00e5ff); }
+.abar span { position: relative; display: block; text-align: center; font-size: 10px; font-weight: 900; line-height: 14px; }
+.ach .arew { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.ach .arew small { color: #ffe082; font-size: 11px; white-space: nowrap; } .ach .arew em { font-style: normal; color: #69f0ae; font-size: 12px; }
+.rewards { margin: 10px 0; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.rewards .axp b { color: #b388ff; }
+.rw { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 10px; background: rgba(255, 255, 255, .05); font-size: 13px; }
+.rw span { color: #ffe082; font-weight: 900; white-space: nowrap; }
+.rw.first { border: 1px solid #ffd54f; background: rgba(255, 213, 79, .1); }
+.rw.up { border: 1px solid #b388ff; background: rgba(124, 77, 255, .12); }
+
+/* 친구 · 길드 */
+.tabs { display: flex; gap: 6px; margin: 4px 0 10px; }
+.tabs .tab { flex: 1; } .tabs .tab.on { background: #4527a0; border-color: #b388ff; }
+.social .sbody { max-height: 64vh; overflow-y: auto; }
+.addrow { display: flex; gap: 6px; flex-wrap: wrap; } .addrow input { flex: 1; min-width: 120px; }
+.person { display: flex; align-items: center; gap: 10px; padding: 7px 10px; margin: 4px 0; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); }
+.person .pinfo { flex: 1; min-width: 0; } .person .pinfo small { display: block; color: var(--sub); font-size: 12px; }
+.person .pslot { width: 40px; height: 40px; border-radius: 10px; overflow: hidden; background: rgba(0, 0, 0, .3); flex: none; }
+.person.off .pslot canvas { filter: grayscale(1) brightness(.7); }
+.odot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #757575; margin-right: 5px; vertical-align: 1px; }
+.person.on .odot { background: #00e676; box-shadow: 0 0 6px #00e676; }
+.person.on { border-color: rgba(0, 230, 118, .45); }
+.gm { font-size: 10px; font-weight: 900; color: #111; background: #ffd54f; padding: 0 5px; border-radius: 5px; } .gm.me { background: #80d8ff; }
+.gcard { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: linear-gradient(135deg, rgba(69, 39, 160, .45), rgba(20, 16, 40, .6)); border: 1px solid #7c4dff; }
+.gcard b { font-family: 'Black Han Sans', sans-serif; font-weight: 400; font-size: 22px; } .gcard small { display: block; color: var(--sub); }
+.gicon { font-size: 28px; }
+.bad { color: #ff8a80; }
+.lobby .modes .rowbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.lobby .modes .rowbtns button { white-space: nowrap; padding: 8px 6px; font-size: 13px; }

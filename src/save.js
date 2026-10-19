@@ -1,12 +1,12 @@
 // 저장: 기기(localStorage)에 계정별로 따로, 구글 계정이면 클라우드에도 (cloud.js)
-import { TREE, CHARS, CHAR_KEYS, RARITY, RARITY_ORDER, BOXES, GACHA, HERO_LV } from './data.js';
+import { TREE, CHARS, CHAR_KEYS, RARITY, RARITY_ORDER, BOXES, GACHA, HERO_LV, ACCOUNT, ACHIEVEMENTS, reachReward } from './data.js';
 
 const BASE = 'elementArena.v1';
 let account = null; // null = 게스트, 'g-<uid>' = 구글 계정
 const keyOf = (acc) => (acc ? `${BASE}:${acc}` : BASE);
 let KEY = keyOf(null);
 let onWrite = null;
-const DEF = { name: '', char: 'knight', owned: ['knight'], gold: 0, tree: [], cleared: 0, pity: 0, boxes: 0, lv: {}, pp: {}, stats: { runs: 0, bestCombo: 0, kos: 0, bestLevel: 0, best: 0, wins: 0 }, muted: false };
+const DEF = { name: '', char: 'knight', owned: ['knight'], gold: 0, tree: [], cleared: 0, pity: 0, boxes: 0, lv: {}, pp: {}, keys: 5, alv: 1, axp: 0, ach: [], stats: { runs: 0, bestCombo: 0, kos: 0, bestLevel: 0, best: 0, wins: 0, kills: 0, coloWins: 0 }, muted: false };
 let data = load();
 
 function load(raw) {
@@ -18,6 +18,8 @@ function load(raw) {
       if (!o.owned.includes('knight')) o.owned.unshift('knight');
       if (!o.owned.includes(o.char)) o.char = 'knight';
       o.lv = { ...(d.lv || {}) }; o.pp = { ...(d.pp || {}) };
+      o.ach = Array.isArray(d.ach) ? d.ach : [];
+      if (!Number.isFinite(d.keys)) o.keys = 5; // 열쇠가 생기기 전 계정: 시작 열쇠 5개
       return o;
     }
   } catch { /* 무시 */ }
@@ -78,8 +80,8 @@ function rollHero(box, force) {
 // 상자 열기: 골드를 내고 칸들을 굴림 → [{ t:'hero', c } | { t:'gold', n, jackpot }]
 export function openBox(box) {
   const B = BOXES[box];
-  if (!B || data.gold < B.price) return null; // 영웅을 다 모아도 열 수 있음 (P.P·골드)
-  data.gold -= B.price;
+  if (!B || (data.keys || 0) < B.price) return null; // 열쇠로 엶. 영웅을 다 모아도 열 수 있음 (P.P·골드)
+  data.keys -= B.price;
   const drops = [];
   for (let i = 0; i < B.drops; i++) {
     const c = rollHero(box, data.pity + 1 >= GACHA.pity);
@@ -117,6 +119,52 @@ export function levelUp(c) {
   data.lv[c] = lv + 1; save();
   return true;
 }
+// ---------- 열쇠 · 계정 레벨 · 업적 · 첫 도달 보상 ----------
+export function addKeys(n) { data.keys = Math.max(0, (data.keys || 0) + n); save(); }
+// 경험치 → 레벨 업 (레벨마다 보상 자동 지급). 반환: [{ lv, keys, gold }]
+export function addXp(n) {
+  const ups = [];
+  data.axp = (data.axp || 0) + Math.round(n);
+  while (data.alv < ACCOUNT.max && data.axp >= ACCOUNT.need(data.alv)) {
+    data.axp -= ACCOUNT.need(data.alv);
+    data.alv++;
+    const R = ACCOUNT.reward(data.alv);
+    data.keys = (data.keys || 0) + R.keys; data.gold += R.gold;
+    ups.push({ lv: data.alv, ...R });
+  }
+  save();
+  return ups;
+}
+// 처음 도달한 스테이지들 보상: prev < k <= reached
+export function reachRewards(reached) {
+  const prev = data.stats.best || 0, out = [];
+  for (let k = Math.max(2, prev + 1); k <= reached; k++) {
+    const R = reachReward(k);
+    if (!R.keys && !R.gold) continue;
+    data.keys = (data.keys || 0) + R.keys; data.gold += R.gold;
+    out.push({ k, ...R });
+  }
+  data.stats.best = Math.max(prev, reached);
+  save();
+  return out;
+}
+export function achValue(stat) {
+  if (stat === 'owned') return data.owned.length;
+  if (stat === 'heroLv') return Math.max(1, ...Object.values(data.lv || {}));
+  if (stat === 'boxes') return data.boxes || 0;
+  if (stat === 'alv') return data.alv || 1;
+  return data.stats[stat] || 0;
+}
+export const achDone = (A) => achValue(A.stat) >= A.goal;
+export const achClaimed = (A) => data.ach.includes(A.id);
+export const achReady = () => ACHIEVEMENTS.filter((A) => achDone(A) && !achClaimed(A)).length;
+export function claimAch(id) {
+  const A = ACHIEVEMENTS.find((a) => a.id === id);
+  if (!A || !achDone(A) || achClaimed(A)) return null;
+  data.ach.push(id); data.keys = (data.keys || 0) + A.keys; data.gold += A.gold; save();
+  return A;
+}
+
 // ---------- 이어하기 (스토리 진행 중 메뉴로 나간 곳) ----------
 export const getRun = () => data.run || null;
 export function setRun(r) { data.run = r || null; save(); }

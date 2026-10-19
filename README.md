@@ -33,6 +33,12 @@ PC와 모바일 브라우저에서 바로 실행되고, 친구와 방 코드로 
 
 **스킬 미리보기**: 영웅 화면에서 스킬을 누르면 짧은 시범 화면.
 
+**재화**: 💰 골드(스킬 트리·영웅 레벨·직접 영입) · 🔑 원소 열쇠(뽑기 상자 전용: 원소 1 · 큰 3 · 메가 8). 열쇠는 계정 레벨 업, 처음 도달한 스테이지, 판마다 보스 처치, 업적으로 얻음.
+
+**계정 레벨**: 스테이지 클리어·보스·콜로세움으로 경험치. 레벨마다 열쇠·골드 보상(5의 배수 레벨은 열쇠 5개).
+
+**업적** 21개, **친구**(닉네임으로 요청·수락, 접속/오프라인·게임 중 방 코드 표시·바로 참가), **길드**(만들기·가입·길드원 접속 상태·내보내기·길드장 넘기기).
+
 **설정**: 소리 켜기/끄기, 조이스틱·스킬 버튼 위치·크기·투명도 편집 (기기마다 저장).
 
 각자 기본 공격 + 스킬 3개. 영웅 그림은 `tools/hero_art.py`의 픽셀 격자로 그리고 `python3 tools/make_heroes.py`로 만듭니다.
@@ -52,6 +58,18 @@ PC와 모바일 브라우저에서 바로 실행되고, 친구와 방 코드로 
     ".write": "auth != null && (!data.exists() || data.val() === auth.uid) && (!newData.exists() || newData.val() === auth.uid)"
   }
 },
+```
+
+- **친구 · 길드 · 접속 표시**도 같은 데이터베이스를 써요. 아래 규칙도 `"rules": {` 바로 아래에 함께 붙여 넣어 주세요:
+
+```json
+"eaProf": { "$uid": { ".read": "auth != null", ".write": "auth != null && auth.uid === $uid" } },
+"eaFriends": { "$uid": { ".read": "auth != null && auth.uid === $uid", ".write": "auth != null && auth.uid === $uid" } },
+"eaFreq": { "$uid": { ".read": "auth != null && auth.uid === $uid", "$from": { ".write": "auth != null && (auth.uid === $from || auth.uid === $uid)" } } },
+"eaFacc": { "$uid": { ".read": "auth != null && auth.uid === $uid", "$from": { ".write": "auth != null && (auth.uid === $from || auth.uid === $uid)" } } },
+"eaGuilds": { ".read": "auth != null", "$gid": { ".write": "auth != null && (!data.exists() || data.child('owner').val() === auth.uid)" } },
+"eaGuildNames": { "$name": { ".read": "auth != null", ".write": "auth != null && (!data.exists() || root.child('eaGuilds').child(data.val()).child('owner').val() === auth.uid)" } },
+"eaGuildMembers": { "$gid": { ".read": "auth != null", "$uid": { ".write": "auth != null && (auth.uid === $uid || root.child('eaGuilds').child($gid).child('owner').val() === auth.uid)" } } },
 ```
 
 ## 조작

@@ -1,9 +1,10 @@
 // 메뉴 화면들 (DOM)
-import { CHARS, CHAR_KEYS, ELEMENTS, TREE, CHAPTERS, REACTIONS, HERO_SPRITE, HERO_SHEETS, AUGMENTS, ITEMS, RARITY, RARITY_ORDER, BOXES, GACHA, HERO_LV, heroStats, STAT_NAMES } from './data.js';
+import { CHARS, CHAR_KEYS, ELEMENTS, TREE, CHAPTERS, REACTIONS, HERO_SPRITE, HERO_SHEETS, AUGMENTS, ITEMS, RARITY, RARITY_ORDER, BOXES, GACHA, HERO_LV, heroStats, STAT_NAMES, ACCOUNT, ACHIEVEMENTS } from './data.js';
 import { COLOSSEUM_ARENAS } from './maps.js';
 import * as SV from './save.js';
 import * as SIM from './sim.js';
 import { createRenderer } from './render.js';
+import * as SO from './social.js';
 import { sfx } from './audio.js';
 
 const $menu = document.getElementById('menu');
@@ -103,7 +104,9 @@ export function lobby(h) {
       <header class="lbar">
         <div class="logo small"><span class="l1">원소</span><span class="l2">아레나</span></div>
         <div class="lstat">
+          <span class="alv" title="계정 레벨"><b>Lv ${s.alv || 1}</b><i style="width:${Math.min(100, ((s.axp || 0) / ACCOUNT.need(s.alv || 1)) * 100)}%"></i></span>
           <span class="gold">💰 ${s.gold} G</span>
+          <span class="keys">🔑 ${s.keys || 0}</span>
           <span class="lvchip">🏆 최고 ${(s.stats.best || 0) > CHAPTERS.length * 5 ? '완주' : s.stats.best ? `${Math.floor((s.stats.best - 1) / 5) + 1}-${((s.stats.best - 1) % 5) + 1}` : '-'}</span>
           <button class="achip" data-act="acct">${a ? `<span class="gdot">G</span> ${esc(a.name || '구글 계정')}` : '👤 게스트'}</button>
         </div>
@@ -126,6 +129,8 @@ export function lobby(h) {
           <button class="big colo" data-go="colo"><b>콜로세움</b><small>친구·봇과 대난투식 대전 · 날려서 링아웃</small></button>
           <button class="big boxbtn" data-go="boxes"><span class="mchest"><i></i></span><span><b>뽑기 상자</b><small>${SV.allOwned() ? '영웅 레벨업 재료 ⚡P.P 모으기' : `새 영웅과 ⚡P.P를 뽑아 보세요 · 영웅 ${s.owned.length}/${CHAR_KEYS.length}`}</small></span></button>
           <div class="rowbtns">
+            <button data-go="achievements">🏆 업적${SV.achReady() ? ` <span class="dot">${SV.achReady()}</span>` : ''}</button>
+            <button data-go="social">👥 친구 · 길드</button>
             <button data-go="tree">🌳 스킬 트리</button>
             <button data-go="join">🔗 코드로 참가</button>
             <button data-go="guide">📖 도움말</button>
@@ -392,14 +397,15 @@ export function boxes(h) {
   const left = GACHA.pity - s.pity;
   show(`
     <div class="panel wide boxshop">
-      <div class="head"><button class="back">← 뒤로</button><h2>뽑기 상자</h2><span class="gold">💰 ${s.gold.toLocaleString()} G</span></div>
+      <div class="head"><button class="back">← 뒤로</button><h2>뽑기 상자</h2><span class="keys">🔑 ${s.keys || 0}</span></div>
+      <p class="sub center keyhow">🔑 <b>원소 열쇠</b>는 계정 레벨 업 · 처음 도달한 스테이지 · 보스 처치 · 업적으로 얻어요.</p>
       <p class="sub center">상자 한 칸마다 <b>아직 없는 영웅</b>이 나올 수 있어요. 안 나오면 <b>⚡ P.P</b>(영웅 레벨업 재료) 또는 골드! 영웅이 안 나올수록 <b>행운</b>이 쌓여 확률이 올라가요.</p>
       <div class="boxes">${Object.entries(BOXES).map(([k, B]) => `
         <div class="boxcard" style="--bc:${B.color}">
           ${chestHtml(B.color, 'small ' + k)}
           <b>${B.name}</b>
           <small>${B.drops}칸${B.luck > 1 ? ` · 행운 +${Math.round((B.luck - 1) * 100)}%` : ''}</small>
-          <button class="big open" data-box="${k}" ${s.gold < B.price ? 'disabled' : ''}>💰 ${B.price.toLocaleString()} G</button>
+          <button class="big open" data-box="${k}" ${(s.keys || 0) < B.price ? 'disabled' : ''}>🔑 ${B.price}</button>
         </div>`).join('')}</div>
       ${all ? '<p class="sub center"><b>🎉 모든 영웅을 모았어요!</b> 이제 상자에서는 ⚡P.P와 골드가 나와요.</p>' : `
       <div class="luck"><span>🍀 행운</span><div class="lbar"><i style="width:${Math.min(100, (s.pity / GACHA.pity) * 100)}%"></i></div><span><b>${left}</b>칸 안에 영웅 확정</span></div>
@@ -492,8 +498,8 @@ function openBox(h, key, drops) {
       ${hs.length || SV.allOwned() ? '' : `<p class="sub">이번엔 영웅이 없었어요… 🍀 행운이 쌓였어요 (${GACHA.pity - s.pity}칸 안에 확정)</p>`}
       <div class="col">
         ${hs.length ? `<button class="big go use" data-c="${hs[hs.length - 1].c}">${CHARS[hs[hs.length - 1].c].name}(으)로 출전</button>` : ''}
-        <button class="big again" ${s.gold < B.price ? 'disabled' : ''}>한 번 더 (💰 ${B.price.toLocaleString()} G)</button>
-        <button class="linkbtn back">← 상자 목록 (보유 💰 ${s.gold.toLocaleString()} G)</button>
+        <button class="big again" ${(s.keys || 0) < B.price ? 'disabled' : ''}>한 번 더 (🔑 ${B.price})</button>
+        <button class="linkbtn back">← 상자 목록 (보유 🔑 ${s.keys || 0})</button>
       </div>
     </div>`;
     root.querySelectorAll('.sh').forEach((e) => e.querySelector('.pslot').appendChild(portrait(e.dataset.c, 56, true)));
@@ -505,6 +511,111 @@ function openBox(h, key, drops) {
   root.addEventListener('pointerdown', (e) => { if (i < drops.length && !e.target.closest('button')) next(); });
   const onKey = (e) => { if (!root.isConnected) { removeEventListener('keydown', onKey); return; } if ((e.code === 'Space' || e.code === 'Enter') && i < drops.length) { e.preventDefault(); next(); } };
   addEventListener('keydown', onKey);
+}
+
+// ---------- 친구 · 길드 ----------
+const ago = (t) => { if (!t) return '오래전'; const m = Math.floor((Date.now() - t) / 60000); return m < 60 ? `${Math.max(1, m)}분 전` : m < 1440 ? `${Math.floor(m / 60)}시간 전` : `${Math.floor(m / 1440)}일 전`; };
+function personRow(p, extra = '') {
+  const pr = p.prof || {};
+  const C = CHARS[pr.char];
+  return `<div class="person ${p.online ? 'on' : 'off'}">
+    <span class="pslot" data-c="${pr.char || ''}"></span>
+    <div class="pinfo"><b>${esc(p.nick || '?')}</b>${p.role === 'owner' ? ' <span class="gm">길드장</span>' : ''}${p.me ? ' <span class="gm me">나</span>' : ''}
+      <small><i class="odot"></i>${p.online ? (pr.room ? `게임 중 · 방 ${esc(pr.room)}` : '접속 중') : `오프라인 · ${ago(pr.t)}`}${pr.alv ? ` · Lv ${pr.alv}` : ''}${C ? ` · ${C.name}` : ''}</small></div>
+    ${extra}
+  </div>`;
+}
+export function social(h, tab = 'friends') {
+  const a = h.accountInfo();
+  const head = `<div class="head"><button class="back">← 뒤로</button><h2>친구 · 길드</h2><span></span></div>
+    <div class="tabs"><button class="tab ${tab === 'friends' ? 'on' : ''}" data-t="friends">👥 친구</button><button class="tab ${tab === 'guild' ? 'on' : ''}" data-t="guild">🛡️ 길드</button></div>`;
+  if (!a?.nick) {
+    show(`<div class="panel">${head}<p class="sub center">친구와 길드는 <b>구글 로그인</b>을 하고 닉네임을 정하면 쓸 수 있어요.</p></div>`);
+    bind('.back', () => h.back());
+    return;
+  }
+  show(`<div class="panel social">${head}<div class="sbody"><p class="sub center">불러오는 중…</p></div></div>`);
+  bind('.back', () => h.back());
+  bind('.tab', (b) => social(h, b.dataset.t));
+  const body = $menu.querySelector('.sbody');
+  const fail = (e) => { body.innerHTML = `<p class="sub center bad">${esc(e.message)}</p>`; };
+  const fillPortraits = () => body.querySelectorAll('.pslot[data-c]').forEach((el) => { if (el.dataset.c && CHARS[el.dataset.c]) el.appendChild(portrait(el.dataset.c, 40, true)); });
+  if (tab === 'friends') {
+    SO.loadFriends().then(({ list, reqs, newly }) => {
+      if (!body.isConnected) return;
+      if (newly.length) toast(`${newly.join(', ')} 님이 친구 요청을 수락했어요!`);
+      body.innerHTML = `
+        <div class="addrow"><input id="fnick" maxlength="10" placeholder="친구 닉네임"><button class="mini sendreq">친구 요청</button></div>
+        <p class="sub tiny">내 닉네임: <b>${esc(a.nick)}</b> — 친구에게 알려 주세요</p>
+        ${reqs.length ? `<h3>받은 요청 ${reqs.length}</h3>${reqs.map((r) => `<div class="person req"><div class="pinfo"><b>${esc(r.nick)}</b><small>${ago(r.t)} 요청</small></div><button class="mini ok" data-u="${r.uid}" data-n="${esc(r.nick)}">수락</button><button class="mini no" data-u="${r.uid}">거절</button></div>`).join('')}` : ''}
+        <h3>친구 ${list.length} <small class="sub">· 접속 중 ${list.filter((f) => f.online).length}</small></h3>
+        ${list.length ? list.map((f) => personRow(f, `${f.online && f.prof?.room ? `<button class="mini joinf" data-code="${esc(f.prof.room)}">참가</button>` : ''}<button class="mini delf" data-u="${f.uid}" data-n="${esc(f.nick)}">✕</button>`)).join('') : '<p class="sub center">아직 친구가 없어요. 닉네임으로 요청을 보내 보세요!</p>'}
+        <button class="linkbtn refresh">↻ 새로 고침</button>`;
+      fillPortraits();
+      const inp = body.querySelector('#fnick');
+      bind('.sendreq', async () => { try { toast(await SO.sendRequest(inp.value.trim(), a.nick)); inp.value = ''; } catch (e) { toast(e.message); } });
+      bind('.ok', async (b) => { try { await SO.acceptRequest(b.dataset.u, b.dataset.n, a.nick); toast(`${b.dataset.n} 님과 친구가 됐어요!`); social(h, 'friends'); } catch (e) { toast(e.message); } });
+      bind('.no', async (b) => { await SO.declineRequest(b.dataset.u).catch((e) => toast(e.message)); social(h, 'friends'); });
+      bind('.delf', async (b) => { if (!confirm(`${b.dataset.n} 님을 친구 목록에서 지울까요?`)) return; await SO.removeFriend(b.dataset.u).catch((e) => toast(e.message)); social(h, 'friends'); });
+      bind('.joinf', (b) => h.joinCode(b.dataset.code));
+      bind('.refresh', () => social(h, 'friends'));
+    }).catch(fail);
+    return;
+  }
+  SO.myGuild().then(async (g) => {
+    if (!body.isConnected) return;
+    if (g) {
+      const on = g.members.filter((m) => m.online).length;
+      body.innerHTML = `
+        <div class="gcard"><span class="gicon">🛡️</span><div><b>${esc(g.name)}</b><small>${esc(g.desc || '길드 소개가 없어요')}</small></div></div>
+        <h3>길드원 ${g.members.length}/${SO.GUILD_MAX} <small class="sub">· 접속 중 ${on}</small></h3>
+        ${g.members.map((m) => personRow(m, `${m.online && m.prof?.room && !m.me ? `<button class="mini joinf" data-code="${esc(m.prof.room)}">참가</button>` : ''}${g.mine && !m.me ? `<button class="mini kick" data-u="${m.uid}" data-n="${esc(m.nick)}">내보내기</button>` : ''}`)).join('')}
+        <div class="col">
+          ${g.mine ? '<button class="mini editdesc">소개 바꾸기</button>' : ''}
+          <button class="mini leave">${g.mine && g.members.length === 1 ? '길드 해체' : '길드 나가기'}</button>
+          <button class="linkbtn refresh">↻ 새로 고침</button>
+        </div>`;
+      fillPortraits();
+      bind('.joinf', (b) => h.joinCode(b.dataset.code));
+      bind('.kick', async (b) => { if (!confirm(`${b.dataset.n} 님을 내보낼까요?`)) return; await SO.kickMember(g, b.dataset.u).catch((e) => toast(e.message)); social(h, 'guild'); });
+      bind('.editdesc', async () => { const d = prompt('길드 소개 (60자)', g.desc || ''); if (d === null) return; await SO.setGuildDesc(g, d).catch((e) => toast(e.message)); social(h, 'guild'); });
+      bind('.leave', async () => { if (!confirm(g.mine && g.members.length > 1 ? '길드장을 다른 사람에게 넘기고 나갈까요?' : '정말 나갈까요?')) return; try { await SO.leaveGuild(g); toast('길드에서 나왔어요'); } catch (e) { toast(e.message); } social(h, 'guild'); });
+      bind('.refresh', () => social(h, 'guild'));
+      return;
+    }
+    const list = await SO.listGuilds().catch(() => []);
+    if (!body.isConnected) return;
+    body.innerHTML = `
+      <p class="sub center">아직 길드가 없어요. 길드에 들어가면 길드원의 접속 상태를 보고 방에 바로 참가할 수 있어요.</p>
+      <h3>길드 만들기</h3>
+      <div class="addrow"><input id="gname" maxlength="12" placeholder="길드 이름 (2~12자)"><input id="gdesc" maxlength="60" placeholder="소개 (선택)"><button class="mini mkg">만들기</button></div>
+      <h3>길드 찾기</h3>
+      ${list.length ? list.map((x) => `<div class="person"><span class="gicon">🛡️</span><div class="pinfo"><b>${esc(x.name)}</b><small>${esc(x.desc || '')} · ${x.count}/${SO.GUILD_MAX}명</small></div><button class="mini jg" data-g="${x.id}" ${x.count >= SO.GUILD_MAX ? 'disabled' : ''}>가입</button></div>`).join('') : '<p class="sub center">아직 길드가 없어요. 첫 길드를 만들어 보세요!</p>'}`;
+    bind('.mkg', async () => { try { await SO.createGuild(body.querySelector('#gname').value, body.querySelector('#gdesc').value, a.nick); toast('길드를 만들었어요!'); social(h, 'guild'); } catch (e) { toast(e.message); } });
+    bind('.jg', async (b) => { try { await SO.joinGuild(b.dataset.g, a.nick); toast('길드에 들어갔어요!'); social(h, 'guild'); } catch (e) { toast(e.message); } });
+  }).catch(fail);
+}
+
+// ---------- 업적 ----------
+export function achievements(h) {
+  const s = SV.S();
+  const list = [...ACHIEVEMENTS].sort((a, b) => (SV.achClaimed(a) - SV.achClaimed(b)) || ((SV.achDone(b) && !SV.achClaimed(b)) - (SV.achDone(a) && !SV.achClaimed(a))));
+  show(`
+    <div class="panel">
+      <div class="head"><button class="back">← 뒤로</button><h2>업적</h2><span class="keys">🔑 ${s.keys || 0}</span></div>
+      <p class="sub center">완료 ${ACHIEVEMENTS.filter((a) => SV.achClaimed(a)).length} / ${ACHIEVEMENTS.length}</p>
+      <div class="achs">${list.map((A) => {
+        const v = Math.min(A.goal, SV.achValue(A.stat)), done = SV.achDone(A), got = SV.achClaimed(A);
+        return `<div class="ach ${got ? 'got' : done ? 'ready' : ''}">
+          <span class="aic">${A.icon}</span>
+          <div class="ainfo"><b>${A.name}</b><small>${A.desc}</small>
+            <div class="abar"><i style="width:${(v / A.goal) * 100}%"></i><span>${v} / ${A.goal}</span></div></div>
+          <div class="arew"><small>🔑${A.keys} 💰${A.gold}</small>${got ? '<em>받음 ✓</em>' : `<button class="mini claim" data-id="${A.id}" ${done ? '' : 'disabled'}>받기</button>`}</div>
+        </div>`;
+      }).join('')}</div>
+    </div>`);
+  bind('.back', () => h.back());
+  bind('.claim', (b) => { const A = SV.claimAch(b.dataset.id); if (A) { sfx('buy'); toast(`업적 「${A.name}」 보상: 🔑 ${A.keys} · 💰 ${A.gold}`); } achievements(h); });
 }
 
 // ---------- 설정 ----------
@@ -728,6 +839,17 @@ export function pause(h, info) {
   bind('.mute', () => h.mute());
   bind('.quit', () => h.quit());
 }
+function rewardHtml(r) {
+  const s = SV.S();
+  const rows = [];
+  for (const x of r.reach) rows.push(`<div class="rw first"><b>🎉 처음 도달 ${Math.floor((x.k - 1) / 5) + 1}-${((x.k - 1) % 5) + 1}${x.title ? ` · ${x.title}` : ''}</b><span>${x.keys ? `🔑 ${x.keys} ` : ''}💰 ${x.gold}</span></div>`);
+  if (r.keys) rows.push(`<div class="rw"><b>보스 처치</b><span>🔑 ${r.keys}</span></div>`);
+  for (const u of r.ups) rows.push(`<div class="rw up"><b>⬆ 계정 레벨 ${u.lv}!</b><span>🔑 ${u.keys} 💰 ${u.gold}</span></div>`);
+  return `<div class="rewards">
+    <div class="axp"><b>계정 Lv ${s.alv}</b><div class="abar"><i style="width:${Math.min(100, (s.axp / ACCOUNT.need(s.alv)) * 100)}%"></i><span>경험치 +${r.xp}</span></div></div>
+    ${rows.join('')}
+  </div>`;
+}
 export function result(h, r) {
   show(`
     <div class="panel small result ${r.win ? 'win' : 'lose'}">
@@ -739,6 +861,7 @@ export function result(h, r) {
         ${r.level !== undefined ? `<div><small>도달 레벨</small><b>${r.level}</b></div>` : ''}
       </div>
       ${r.augs?.length ? `<div class="auglist">${r.augs.map((id) => { const A = AUGMENTS.find((a) => a.id === id); return A ? `<span class="augchip ${A.tier === 2 ? 'leg' : ''}" title="${A.desc}">${A.icon} ${A.name}</span>` : ''; }).join('')}</div>` : ''}
+      ${r.rewards ? rewardHtml(r.rewards) : ''}
       ${r.note ? `<p class="sub">${r.note}</p>` : ''}
       <div class="col">
         ${r.next ? '<button class="next big">다음 장으로</button>' : ''}

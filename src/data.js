@@ -220,6 +220,45 @@ export const CHARS = {
 };
 export const CHAR_KEYS = Object.keys(CHARS);
 
+// ---------- 계정 레벨 (플레이할수록 오름, 레벨마다 보상) ----------
+export const ACCOUNT = {
+  max: 60,
+  need: (lv) => 60 + lv * 30,                         // lv → lv+1 경험치
+  xp: { stage: 10, boss: 30, coloGame: 10, coloWin: 20 },
+  reward: (lv) => ({ keys: lv % 5 === 0 ? 5 : 2, gold: 40 + lv * 8 }),   // lv에 도달했을 때
+  bossKeys: 1,                                           // 판마다 보스 처치당 열쇠
+};
+// 처음 도달한 스테이지 보상 (k = 1-1이 1 … 4-5가 20, 끝까지 깨면 21)
+export function reachReward(k) {
+  const boss = k > 1 && (k - 1) % 5 === 0;   // 보스를 처음 쓰러뜨림
+  if (k === 21) return { keys: 10, gold: 500, title: '모든 장 돌파' };
+  return { keys: boss ? 3 : k % 2 === 0 ? 1 : 0, gold: 15 + k * 4 + (boss ? 100 : 0), title: boss ? `${(k - 1) / 5}장 보스 첫 처치` : '' };
+}
+// 업적: stat = 저장의 어떤 값을 볼지, goal = 목표
+export const ACHIEVEMENTS = [
+  { id: 'reach6', icon: '🌲', name: '숲을 지나서', desc: '1장 보스를 쓰러뜨리기', stat: 'best', goal: 6, keys: 3, gold: 100 },
+  { id: 'reach11', icon: '⚰️', name: '무덤 정복자', desc: '2장 보스를 쓰러뜨리기', stat: 'best', goal: 11, keys: 4, gold: 200 },
+  { id: 'reach16', icon: '🔥', name: '요새 함락', desc: '3장 보스를 쓰러뜨리기', stat: 'best', goal: 16, keys: 5, gold: 300 },
+  { id: 'reach21', icon: '❄️', name: '봉우리의 주인', desc: '4장까지 모두 돌파', stat: 'best', goal: 21, keys: 10, gold: 500 },
+  { id: 'kill100', icon: '⚔️', name: '사냥꾼', desc: '적 100마리 처치', stat: 'kills', goal: 100, keys: 1, gold: 50 },
+  { id: 'kill500', icon: '🗡️', name: '베테랑', desc: '적 500마리 처치', stat: 'kills', goal: 500, keys: 3, gold: 150 },
+  { id: 'kill2000', icon: '💀', name: '전장의 악몽', desc: '적 2000마리 처치', stat: 'kills', goal: 2000, keys: 6, gold: 400 },
+  { id: 'combo30', icon: '🔗', name: '연결 고리', desc: '한 판에 30 콤보', stat: 'bestCombo', goal: 30, keys: 1, gold: 60 },
+  { id: 'combo80', icon: '⛓️', name: '끊이지 않는 사슬', desc: '한 판에 80 콤보', stat: 'bestCombo', goal: 80, keys: 3, gold: 150 },
+  { id: 'colo1', icon: '🏟️', name: '첫 승리', desc: '콜로세움에서 1번 이기기', stat: 'coloWins', goal: 1, keys: 1, gold: 50 },
+  { id: 'colo10', icon: '🏆', name: '투기장의 별', desc: '콜로세움에서 10번 이기기', stat: 'coloWins', goal: 10, keys: 4, gold: 200 },
+  { id: 'ko30', icon: '💫', name: '링아웃 장인', desc: '콜로세움에서 30번 날려 버리기', stat: 'kos', goal: 30, keys: 3, gold: 150 },
+  { id: 'own5', icon: '🧑‍🤝‍🧑', name: '동료 모으기', desc: '영웅 5명 보유', stat: 'owned', goal: 5, keys: 2, gold: 100 },
+  { id: 'own12', icon: '👑', name: '모든 영웅', desc: '영웅 12명 모두 보유', stat: 'owned', goal: 12, keys: 8, gold: 500 },
+  { id: 'hlv5', icon: '⬆️', name: '성장', desc: '영웅 하나를 5레벨로', stat: 'heroLv', goal: 5, keys: 2, gold: 100 },
+  { id: 'hlv10', icon: '🌟', name: '최고의 경지', desc: '영웅 하나를 10레벨로', stat: 'heroLv', goal: 10, keys: 6, gold: 400 },
+  { id: 'box10', icon: '🎁', name: '상자 수집가', desc: '상자 10개 열기', stat: 'boxes', goal: 10, keys: 2, gold: 50 },
+  { id: 'box50', icon: '🗝️', name: '열쇠의 달인', desc: '상자 50개 열기', stat: 'boxes', goal: 50, keys: 5, gold: 200 },
+  { id: 'alv10', icon: '🎖️', name: '숙련자', desc: '계정 10레벨', stat: 'alv', goal: 10, keys: 3, gold: 150 },
+  { id: 'alv30', icon: '🏅', name: '전설의 모험가', desc: '계정 30레벨', stat: 'alv', goal: 30, keys: 8, gold: 500 },
+  { id: 'runs10', icon: '🎮', name: '꾸준함', desc: '10판 플레이', stat: 'runs', goal: 10, keys: 2, gold: 80 },
+];
+
 // ---------- 영웅 레벨 (상자의 P.P + 골드로 올림, 스토리에서만 적용) ----------
 // 기본 능력치: 체력(받는 % 줄임) · 공격력 · 방어막(스테이지 시작·부활 때 %를 먼저 막아 줌) · 이동 속도 · 치명타율 · 치명타 피해
 export const HERO_STATS = {
@@ -264,10 +303,12 @@ export const RARITY = {
 };
 export const RARITY_ORDER = ['rare', 'super', 'epic', 'legend'];
 export const BOXES = {
-  small: { name: '원소 상자', price: 120, drops: 1, luck: 1, color: '#42a5f5', gold: [12, 35] },
-  big: { name: '큰 원소 상자', price: 330, drops: 3, luck: 1.15, color: '#ab47bc', gold: [12, 35] },
-  mega: { name: '메가 원소 상자', price: 1000, drops: 10, luck: 1.35, color: '#ff7043', gold: [12, 35] },
+  small: { name: '원소 상자', price: 1, drops: 1, luck: 1, color: '#42a5f5', gold: [12, 35] },
+  big: { name: '큰 원소 상자', price: 3, drops: 3, luck: 1.15, color: '#ab47bc', gold: [12, 35] },
+  mega: { name: '메가 원소 상자', price: 8, drops: 10, luck: 1.35, color: '#ff7043', gold: [12, 35] },
 };
+// 상자는 골드가 아니라 🔑 원소 열쇠로 엶 (price = 열쇠 개수)
+// 열쇠 얻는 곳: 계정 레벨 업 · 처음 도달한 스테이지 · 보스 처치(판마다) · 업적
 export const GACHA = { luckPer: 0.06, pity: 45, jackpot: 0.04, jackpotGold: [110, 200], ppChance: 0.55, pp: [8, 26] };
 // 영웅 그림: assets/heroes.png 한 칸 48x48 (발끝 46행), 한 줄 = 한 캐릭터
 //  0-3 서기 · 4-9 걷기 · 10 준비 · 11 공격 · 12 마무리 · 13 맞음 · 14 쓰러짐 · 15 승리

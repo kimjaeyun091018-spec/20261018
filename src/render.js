@@ -173,6 +173,7 @@ export function createRenderer(canvas) {
   const texts = [];
   const ghosts = [];
   const banners = [];
+  const reacts = [];
   const anim = new Map();
   const mapCache = new Map();
   let shake = 0, flash = 0, flashCol = '#fff', punch = 0, dpr = 1, slowmo = 0;
@@ -190,7 +191,8 @@ export function createRenderer(canvas) {
       const sz = clamp(15 + f.v * 0.55, 15, 40) * (f.crit ? 1.35 : 1);
       texts.push({ x: f.x + rnd(-8, 8), y: f.y - 14, vx: rnd(-40, 40), vy: -170, text: f.onHero ? `${f.v}%` : f.crit ? `${f.v}!` : String(f.v), size: f.onHero ? sz * 0.85 : sz, color: f.onHero ? '#ff8a80' : f.crit ? '#ffd54f' : f.react ? '#fff59d' : f.el ? elColor(f.el) : '#ffffff', life: 0.8, max: 0.8, pop: 1, grav: 380 });
     },
-    react(f) { texts.push({ x: f.x, y: f.y - 34, vx: 0, vy: -50, text: f.name, size: 26, color: f.color, life: 1.1, max: 1.1, pop: 1.6, grav: 0, react: true }); },
+    // 원소 반응 이름: 캐릭터를 가리지 않게 화면 오른쪽 콤보 옆 작은 목록으로
+    react(f) { reacts.unshift({ text: f.name, color: f.color, t: 2.2 }); if (reacts.length > 4) reacts.length = 4; },
     goldPop(f) { texts.push({ x: f.x, y: f.y - 20, vx: 0, vy: -60, text: `+${f.v} G`, size: 18, color: '#ffd54f', life: 1, max: 1, pop: 1, grav: 0 }); },
     heal(f) { if (Math.random() < 0.5) texts.push({ x: f.x + rnd(-8, 8), y: f.y - 10, vx: 0, vy: -50, text: `-${f.v}%`, size: 14, color: '#69f0ae', life: 0.6, max: 0.6, pop: 1, grav: 0 }); },
     say(x, y, text, color, size = 18) { texts.push({ x, y, vx: 0, vy: -45, text, size, color, life: 1.3, max: 1.3, pop: 1.3, grav: 0, react: true }); },
@@ -792,6 +794,12 @@ export function createRenderer(canvas) {
       ctx.restore();
     }
     lastCombo = meH ? meH.cb : 0;
+    // 원소 반응 목록 (콤보 아래)
+    reacts.forEach((r, i) => {
+      ctx.save(); ctx.globalAlpha = clamp(r.t, 0, 1) * (i === 0 ? 1 : 0.75);
+      label(r.text, VIEW_W - 22, 236 + i * 22, r.color, i === 0 ? 18 : 15, { align: 'right', strokeColor: '#1a0b2e', stroke: 5 });
+      ctx.restore();
+    });
     // 큰 알림 (레벨 업 등)
     for (const b of banners) {
       const k = b.t / b.max, e = 1 - k;
@@ -840,6 +848,8 @@ export function createRenderer(canvas) {
     for (const t of texts) { t.life -= dt; t.vy += t.grav * dt; t.x += t.vx * dt; t.y += t.vy * dt; t.pop = Math.max(0, t.pop - dt * 6); }
     for (let i = texts.length - 1; i >= 0; i--) if (texts[i].life <= 0) texts.splice(i, 1);
     for (const b of banners) b.t -= dt;
+    for (const r of reacts) r.t -= dt;
+    for (let i = reacts.length - 1; i >= 0; i--) if (reacts[i].t <= 0) reacts.splice(i, 1);
     for (let i = banners.length - 1; i >= 0; i--) if (banners[i].t <= 0) banners.splice(i, 1);
     shake = Math.max(0, shake - dt * 40);
     flash = Math.max(0, flash - dt);

@@ -90,9 +90,9 @@ async function auth() {
     throw new Error('구글 로그인이 만료됐어요. 다시 로그인해 주세요');
   }
 }
-async function db(method, path, body) {
+async function db(method, path, body, query = '') {
   const s = await auth();
-  const res = await fetch(`${FIREBASE.databaseURL}/${path}.json?auth=${encodeURIComponent(s.idToken)}`, {
+  const res = await fetch(`${FIREBASE.databaseURL}/${path}.json?auth=${encodeURIComponent(s.idToken)}${query}`, {
     method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => null);
@@ -168,3 +168,13 @@ export async function flushPush() {
 }
 addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushPush(); });
 addEventListener('pagehide', () => flushPush());
+
+// 친구·길드(social.js)에서 쓰는 통로
+export const cloudDb = db;
+export async function myUid() { return (await auth()).uid; }
+export const nickKeyOf = (n) => nickKey(n);
+// 창을 닫을 때: 저장된 출입증으로 바로 보냄 (기다리지 않음)
+export function beaconPatch(path, body) {
+  if (!session?.idToken || session.exp < Date.now()) return;
+  try { fetch(`${FIREBASE.databaseURL}/${path}.json?auth=${encodeURIComponent(session.idToken)}`, { method: 'PATCH', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); } catch { /* 무시 */ }
+}

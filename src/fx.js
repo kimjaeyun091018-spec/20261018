@@ -810,7 +810,7 @@ export function drawFx(ctx, f, now) {
     case 'warn': {
       // 바닥 경고: 가장자리 원 + 안쪽이 차오름
       const fill = 1 - k;
-      const col = f.el === 'lightning' ? '255,225,77' : '255,40,60';
+      const col = f.ally ? '70,170,255' : f.el === 'lightning' ? '255,225,77' : '255,40,60';
       ctx.globalAlpha = 1;
       ctx.fillStyle = `rgba(${col},${0.12 + 0.1 * Math.sin(T * 20)})`; ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, TAU); ctx.fill();
       ctx.fillStyle = `rgba(${col},.32)`; ctx.beginPath(); ctx.arc(f.x, f.y, f.r * fill, 0, TAU); ctx.fill();
