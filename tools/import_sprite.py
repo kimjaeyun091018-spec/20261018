@@ -14,9 +14,13 @@ import numpy as np
 from PIL import Image
 
 
+BG = (255, 0, 255)
+
+
 def is_bg(c):
+    """배경(모서리에서 잰 분홍)과 가까운 색만 배경. 보라색 캐릭터가 지워지지 않게 좁게 잡음"""
     r, g, b = c[:3]
-    return r > 170 and b > 170 and g < 110
+    return (r - BG[0]) ** 2 + (g - BG[1]) ** 2 + (b - BG[2]) ** 2 < 75 ** 2
 
 
 def estimate_pixel(im, mask, x0):
@@ -67,9 +71,10 @@ def shrink(img, H):
 
 
 def main(src, out, p=None, target=None):
+    global BG
     im = np.array(Image.open(src).convert('RGB')).astype(int)
-    mask = np.array([[is_bg(px) for px in row] for row in im[::1]]) if im.shape[0] < 1 else (
-        (im[:, :, 0] > 170) & (im[:, :, 2] > 170) & (im[:, :, 1] < 110))
+    BG = tuple(int(v) for v in np.median(np.concatenate([im[:8, :8].reshape(-1, 3), im[-8:, -8:].reshape(-1, 3), im[:8, -8:].reshape(-1, 3)]), 0))
+    mask = ((im - np.array(BG)) ** 2).sum(2) < 75 ** 2
     ys, xs = np.where(~mask)
     x0, y0 = xs.min(), ys.min()
     p = float(p) if p else estimate_pixel(im, mask, x0)
@@ -90,7 +95,7 @@ def main(src, out, p=None, target=None):
     for j in range(ny):
         for i in range(nx):
             r, g, b, a = res[j, i]
-            if a and r > 110 and b > 110 and g < 80:
+            if a and (int(r) - BG[0]) ** 2 + (int(g) - BG[1]) ** 2 + (int(b) - BG[2]) ** 2 < 120 ** 2:
                 edge = any(not (0 <= j + dj < ny and 0 <= i + di < nx) or res[j + dj, i + di, 3] == 0 for dj, di in ((1, 0), (-1, 0), (0, 1), (0, -1)))
                 if edge:
                     res[j, i, 3] = 0

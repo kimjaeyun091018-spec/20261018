@@ -227,6 +227,7 @@ export const HERO_SPRITE = { size: 48, draw: 72, frames: 16, portrait: 64 };
 export const HERO_SHEETS = {
   archer: { file: 'hero_archer.png', cell: 72, scale: 1.0 },
   mage: { file: 'hero_mage.png', cell: 80, scale: 1.0 },
+  reaper: { file: 'hero_reaper.png', cell: 128, scale: 0.72 },
 };
 
 // ---------- 적 (assets/enemies.png 24x24: 종류마다 [걷기1, 걷기2, 쓰러짐]) ----------

@@ -310,7 +310,7 @@ def sprite_frames(key):
         for x in range(w):
             if px[x, y][3] == 0:
                 continue
-            if x >= sx0 and y >= sy0:
+            if (x >= sx0 and y >= sy0) or any(a <= x < c and b <= y < d for a, b, c, d in S.get('weapon_extra', ())):
                 wp[x, y] = px[x, y]
             else:
                 bp[x, y] = px[x, y]

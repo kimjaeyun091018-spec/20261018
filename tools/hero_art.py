@@ -784,7 +784,8 @@ HEROES['reaper'] = dict(
         '..........vvrrR.....',
     ], pivot=(3, 1)),
     kind='melee', legs=('p', 'o', 'O'), arm='a', glove='r', reach=3, sway=True,
-    ang=dict(rest=-40, windup=-150, strike=10, follow=70, hurt=-20, win=-90),
+    ang=dict(rest=-40, windup=-150, strike=10, follow=70, hurt=-20, win=-90),    sprite=dict(file='tools/art/reaper.png', cell=128, scale=0.72, weapon_from=(60, 0), weapon_extra=((30, 0, 60, 13), (50, 13, 60, 22)), pivot=(60, 59), legs=(84, 42), face=(33, 24, 32),
+                ang=dict(rest=0, windup=-20, strike=28, follow=40, hurt=8, win=-12)),
 )
 
 # =====================================================================
