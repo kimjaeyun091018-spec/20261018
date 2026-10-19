@@ -220,6 +220,38 @@ export const CHARS = {
 };
 export const CHAR_KEYS = Object.keys(CHARS);
 
+// ---------- 영웅 레벨 (상자의 P.P + 골드로 올림, 스토리에서만 적용) ----------
+// 기본 능력치: 체력(받는 % 줄임) · 공격력 · 방어막(스테이지 시작·부활 때 %를 먼저 막아 줌) · 이동 속도 · 치명타율 · 치명타 피해
+export const HERO_STATS = {
+  knight: { hp: 130, atk: 100, shield: 20, crit: 5, critDmg: 50 },
+  archer: { hp: 100, atk: 100, shield: 12, crit: 8, critDmg: 50 },
+  mage: { hp: 95, atk: 104, shield: 15, crit: 5, critDmg: 55 },
+  ninja: { hp: 100, atk: 96, shield: 10, crit: 12, critDmg: 60 },
+  guardian: { hp: 160, atk: 94, shield: 35, crit: 3, critDmg: 50 },
+  priest: { hp: 110, atk: 95, shield: 28, crit: 5, critDmg: 50 },
+  sniper: { hp: 90, atk: 108, shield: 10, crit: 10, critDmg: 80 },
+  alchemist: { hp: 100, atk: 100, shield: 16, crit: 6, critDmg: 50 },
+  berserker: { hp: 140, atk: 108, shield: 15, crit: 7, critDmg: 60 },
+  miko: { hp: 100, atk: 104, shield: 20, crit: 6, critDmg: 55 },
+  reaper: { hp: 115, atk: 104, shield: 15, crit: 9, critDmg: 70 },
+  pirate: { hp: 115, atk: 100, shield: 16, crit: 8, critDmg: 60 },
+};
+// 레벨마다 소폭 증가: hp·atk·spd는 %(기본값에 곱함), shield는 점수, crit·critDmg는 %p
+export const HERO_GROW = { hp: 0.03, atk: 0.03, shield: 3, spd: 0.01, crit: 0.6, critDmg: 4 };
+export const HERO_LV = {
+  max: 10,
+  pp: [0, 20, 30, 50, 80, 130, 210, 340, 550, 890],       // pp[lv] = lv → lv+1 에 필요한 P.P
+  gold: [0, 20, 35, 75, 140, 290, 480, 800, 1250, 1875],  // 골드
+};
+export function heroStats(char, lv = 1) {
+  const B = HERO_STATS[char] || HERO_STATS.knight, C = CHARS[char] || CHARS.knight, k = Math.max(0, lv - 1), G = HERO_GROW;
+  return {
+    hp: Math.round(B.hp * (1 + G.hp * k)), atk: Math.round(B.atk * (1 + G.atk * k)), shield: B.shield + G.shield * k,
+    spd: Math.round(C.speed * (1 + G.spd * k)), crit: +(B.crit + G.crit * k).toFixed(1), critDmg: B.critDmg + G.critDmg * k,
+  };
+}
+export const STAT_NAMES = [['hp', '체력', '❤️'], ['atk', '공격력', '⚔️'], ['shield', '방어막', '🛡️'], ['spd', '이동 속도', '👟'], ['crit', '치명타율', '🎯', '%'], ['critDmg', '치명타 피해', '💥', '%']];
+
 // ---------- 뽑기 상자 (옛 브롤스타즈 상자처럼) ----------
 // 상자 하나 = 칸(drop) 여러 개. 칸마다: 아직 없는 영웅이 나올 수 있고, 아니면 골드
 // 영웅이 안 나올수록 '행운'이 쌓여 확률이 오름 (luckPer), pity칸 동안 안 나오면 다음 칸은 영웅 확정
@@ -236,7 +268,7 @@ export const BOXES = {
   big: { name: '큰 원소 상자', price: 330, drops: 3, luck: 1.15, color: '#ab47bc', gold: [25, 70] },
   mega: { name: '메가 원소 상자', price: 1000, drops: 10, luck: 1.35, color: '#ff7043', gold: [25, 70] },
 };
-export const GACHA = { luckPer: 0.06, pity: 45, jackpot: 0.04, jackpotGold: [220, 380] };
+export const GACHA = { luckPer: 0.06, pity: 45, jackpot: 0.04, jackpotGold: [220, 380], ppChance: 0.55, pp: [8, 26] };
 // 영웅 그림: assets/heroes.png 한 칸 48x48 (발끝 46행), 한 줄 = 한 캐릭터
 //  0-3 서기 · 4-9 걷기 · 10 준비 · 11 공격 · 12 마무리 · 13 맞음 · 14 쓰러짐 · 15 승리
 // assets/portraits.png 한 칸 64x64 (캐릭터 순서대로 가로)
@@ -250,7 +282,7 @@ export const HERO_SHEETS = {
 };
 
 // ---------- 적 (assets/enemies.png 24x24: 종류마다 [걷기1, 걷기2, 쓰러짐]) ----------
-export const ENEMY_SHEET = ['slime', 'archer', 'brute', 'bat', 'spider', 'bomber', 'caster', 'shield', 'totem'];
+export const ENEMY_SHEET = ['slime', 'archer', 'brute', 'bat', 'spider', 'bomber', 'caster', 'shield', 'totem', 'yeti', 'frostwisp', 'minisnow'];
 export const ENEMIES = {
   slime: { name: '슬라임', hp: 34, r: 13, speed: 85, weight: 0.9, touch: 9, kb: [130, 200], ai: 'chase', gold: 2, xp: 7 },
   bat: { name: '박쥐', hp: 20, r: 10, speed: 150, weight: 0.7, touch: 7, kb: [110, 160], ai: 'zigzag', gold: 1, xp: 5 },
@@ -263,12 +295,20 @@ export const ENEMIES = {
   shield: { name: '방패병', hp: 90, r: 16, speed: 60, weight: 1.5, touch: 12, kb: [160, 240], ai: 'shield', gold: 6, xp: 15,
     guard: 0.45, arc: 1.15,
     charge: { every: [3.2, 4.6], range: [70, 360], warn: 0.65, time: 0.6, speed: 420, dmg: 16, kb: [250, 330], stagger: 1.3, wallStagger: 2.2 } },
+  // 4장: 설인 (내려찍으면 주변이 얼어붙음) · 서리 정령 (맞은 자리에 빙판)
+  yeti: { name: '설인', hp: 130, r: 18, speed: 78, weight: 1.7, touch: 14, kb: [200, 300], ai: 'slam', slam: { r: 95, dmg: 18, kb: [220, 300], warn: 0.75, every: 3, ice: 2.4 }, gold: 8, xp: 19 },
+  frostwisp: { name: '서리 정령', hp: 40, r: 11, speed: 95, weight: 0.8, ai: 'ranged', fire: { every: 1.7, speed: 290, dmg: 9, look: 'shard', el: 'ice', ice: 1.2 }, gold: 4, xp: 11 },
   totem: { name: '저주 토템', hp: 70, r: 14, speed: 0, weight: 99, ai: 'totem', fire: { every: 0.5, speed: 190, dmg: 8, look: 'eorb' }, gold: 5, xp: 13 },
 };
 // 보스 (assets/bosses.png 40x40: [1, 2, 쓰러짐] × 3)
 export const BOSSES = {
-  kingslime: { name: '거대 슬라임 왕', sheet: 0, hp: 900, r: 34, speed: 70, weight: 4, touch: 16, color: '#66bb6a', pats: ['ring', 'jump', 'summon'] },
+  // 슬라임 왕: 쓰러지면 작은 왕 2마리로 분열 (2번까지). hpShare = 이 세대가 전체 체력에서 차지하는 몫
+  kingslime: { name: '거대 슬라임 왕', sheet: 0, hp: 900, r: 34, speed: 70, weight: 4, touch: 16, color: '#66bb6a', pats: ['ring', 'jump', 'summon'], split: { gens: 2, share: [0.4, 0.15, 0.075], size: [1, 0.68, 0.46] } },
   bonelord: { name: '해골 궁수 대장', sheet: 1, hp: 1100, r: 30, speed: 90, weight: 3.5, touch: 14, color: '#e0e0e0', pats: ['volley', 'drill', 'rain', 'dash', 'drill'] },
+  // 눈사람 대왕: 체력 절반 이하 → 몸통(뛰어다니며 밟기)과 머리(굴러다니며 냉기 → 빙판)로 분리
+  snowman: { name: '눈보라 대왕', sheet: 3, hp: 2100, r: 38, speed: 55, weight: 5, touch: 18, color: '#b3e5fc', pats: ['snowball', 'jump', 'icering', 'snowball', 'summonsnow'], splitAt: 0.5 },
+  snowbody: { name: '눈보라 대왕 · 몸통', sheet: 4, hp: 1, r: 34, speed: 60, weight: 6, touch: 18, color: '#e1f5fe', pats: ['stomp'], every: [1.5, 1.1], part: true },
+  snowhead: { name: '눈보라 대왕 · 머리', sheet: 5, hp: 1, r: 24, speed: 175, weight: 3, touch: 14, color: '#81d4fa', pats: [], part: true, roll: true },
   golem: { name: '심연의 골렘', sheet: 2, hp: 1500, r: 36, speed: 60, weight: 5, touch: 20, color: '#ff7043', pats: ['laser', 'fissure', 'slam', 'ring', 'fissure'] },
 };
 
@@ -281,7 +321,14 @@ export const CHAPTERS = [
     waves: [['archer', 'slime', 'spider'], ['caster', 'archer', 'bat', 'spider'], ['archer', 'caster', 'spider', 'spider', 'bat']] },
   { name: '불타는 요새', floor: ['#2a1d1b', '#30211f'], wall: '#4e342e', wallTop: '#6d4c41', boss: 'golem',
     waves: [['brute', 'bomber', 'archer'], ['shield', 'caster', 'bomber', 'totem'], ['brute', 'shield', 'archer', 'caster', 'bomber']] },
+  // 4장: 꼬마 눈사람이 영웅마다 하나씩 따라다니며 도와줌. 곳곳이 빙판 (미끄러움)
+  { name: '얼어붙은 봉우리', floor: ['#2a3a48', '#2f4150'], wall: '#46617a', wallTop: '#7b9cb8', boss: 'snowman', snow: true, ally: 'minisnow',
+    waves: [['frostwisp', 'yeti', 'bat', 'spider'], ['yeti', 'frostwisp', 'shield', 'caster'], ['yeti', 'yeti', 'frostwisp', 'frostwisp', 'bomber']] },
 ];
+// 아군 꼬마 눈사람: 주인을 따라다니며 가까운 적에게 눈덩이 (맞으면 둔화). 무적
+export const ALLY = { minisnow: { name: '꼬마 눈사람', r: 10, speed: 210, every: 1.0, range: 330, shot: { speed: 420, r: 7, dmg: 7, kb: [110, 170], life: 0.9, look: 'snowball', el: 'ice', power: 1 } } };
+// 빙판: 그 위에서는 미끄러짐 (걷기 가속이 느리고 넉백이 잘 안 멈춤)
+export const ICE = { time: 9, accel: 1.8, kbFriction: 0.35 };
 export const STAGES_PER_CHAPTER = 5;
 export const STORY = {
   hpScale: (ch, st) => 1 + ch * 0.9 + st * 0.15,   // 적 체력 배율
@@ -299,8 +346,8 @@ export const STORY = {
 // 땅 무너짐: 시간이 지나면 바깥 줄부터 공허로 (경고 → 붕괴)
 export const COLLAPSE = { warn: 2.2 };
 // 레벨: 처치 경험치는 파티가 함께 모음. 레벨업마다 증강 3개 중 1개 선택
-// 증강을 고르는 스테이지 (장-스테이지, 0부터): 1-1 · 1-3 · 1-5(전설) · 2-3 · 2-5(전설) · 3-3
-export const AUG_STAGES = { '0-0': 1, '0-2': 1, '0-4': 2, '1-2': 1, '1-4': 2, '2-2': 1 };
+// 증강을 고르는 스테이지 (장-스테이지, 0부터): 1-1 · 1-3 · 1-5(전설) · 2-3 · 2-5(전설) · 3-3 · 3-5(전설) · 4-3
+export const AUG_STAGES = { '0-0': 1, '0-2': 1, '0-4': 2, '1-2': 1, '1-4': 2, '2-2': 1, '2-4': 2, '3-2': 1 };
 export const LEVEL = { need: (lv) => 16 + lv * 12, autoPick: 15 };
 // 아이템 (상자, 콜로세움 보급)
 export const ITEMS = {
@@ -337,6 +384,7 @@ export const AUGMENTS = [
   { id: 'frostbite', tier: 1, icon: '❄️', name: '서리 기운', desc: '모든 공격 25% 확률로 둔화', b: { chill: 0.25 } },
   { id: 'greed', tier: 1, icon: '🪙', name: '탐욕의 동전', desc: '골드 +30%', b: { gold: 0.3 } },
   { id: 'scholar', tier: 1, icon: '🧲', name: '자석 손', desc: '아이템을 멀리서 줍기, 골드 +15%', b: { gold: 0.15, magnet: 1 } },
+  { id: 'rhythm', tier: 1, icon: '🎵', name: '수확의 리듬', desc: '적을 처치할 때마다 모든 스킬 쿨타임 0.6초 감소', b: { killCd: 0.6 } },
   { id: 'giant', tier: 1, icon: '🗿', name: '거인의 혈통', desc: '몸집·피해 +15%, 훨씬 덜 밀려남, 조금 느려짐', b: { size: 0.2, atk: 0.15, weight: 0.3, spd: -0.06 } },
   { id: 'phoenix', tier: 2, icon: '🐦‍🔥', name: '불사조의 깃털', desc: '목숨 +2, 다시 나타날 때 화염 폭발', b: { rebirth: 1 }, lives: 2 },
   { id: 'twin', tier: 2, icon: '✨', name: '쌍둥이 정령', desc: '강력한 수호 구체 4개', b: { orbs: 4, orbDmg: 6 } },

@@ -1,5 +1,5 @@
 // 메뉴 화면들 (DOM)
-import { CHARS, CHAR_KEYS, ELEMENTS, TREE, CHAPTERS, REACTIONS, HERO_SPRITE, HERO_SHEETS, AUGMENTS, ITEMS, RARITY, RARITY_ORDER, BOXES, GACHA } from './data.js';
+import { CHARS, CHAR_KEYS, ELEMENTS, TREE, CHAPTERS, REACTIONS, HERO_SPRITE, HERO_SHEETS, AUGMENTS, ITEMS, RARITY, RARITY_ORDER, BOXES, GACHA, HERO_LV, heroStats, STAT_NAMES } from './data.js';
 import { COLOSSEUM_ARENAS } from './maps.js';
 import * as SV from './save.js';
 import { sfx } from './audio.js';
@@ -102,7 +102,7 @@ export function lobby(h) {
         <div class="logo small"><span class="l1">원소</span><span class="l2">아레나</span></div>
         <div class="lstat">
           <span class="gold">💰 ${s.gold} G</span>
-          <span class="lvchip">🏆 최고 ${(s.stats.best || 0) >= 16 ? '완주' : s.stats.best ? `${Math.floor((s.stats.best - 1) / 5) + 1}-${((s.stats.best - 1) % 5) + 1}` : '-'}</span>
+          <span class="lvchip">🏆 최고 ${(s.stats.best || 0) > CHAPTERS.length * 5 ? '완주' : s.stats.best ? `${Math.floor((s.stats.best - 1) / 5) + 1}-${((s.stats.best - 1) % 5) + 1}` : '-'}</span>
           <button class="achip" data-act="acct">${a ? `<span class="gdot">G</span> ${esc(a.name || '구글 계정')}` : '👤 게스트'}</button>
         </div>
       </header>
@@ -127,6 +127,7 @@ export function lobby(h) {
             <button data-go="tree">🌳 스킬 트리</button>
             <button data-go="join">🔗 코드로 참가</button>
             <button data-go="guide">📖 도움말</button>
+            <button data-go="settings">⚙️ 설정</button>
           </div>
           <div class="acct" id="acct"></div>
         </section>
@@ -243,7 +244,7 @@ export function chars(h) {
           const C = CHARS[k], E = ELEMENTS[C.el], own = SV.owns(k);
           const R = RARITY[C.rarity] || RARITY.start;
           return `<button class="char ${k === sel ? 'on' : ''} ${own ? '' : 'locked'} ${k === s.char ? 'cur' : ''}" data-c="${k}" style="--c:${C.color};--r:${R.color}">
-            <span class="rtag">${R.name}</span>
+            <span class="rtag">${R.name}</span>${own ? `<span class="lvtag">Lv${SV.heroLv(k)}</span>` : ''}
             <span class="pslot"></span>
             <span class="cname">${C.name}</span>
             <span class="ctitle">${C.title}</span>
@@ -266,6 +267,7 @@ export function chars(h) {
           <p class="lore">${C.lore}</p>
         </div>
       </div>
+      ${levelBox(sel, own)}
       <div class="sklist">${C.skills.map((S, i) => `<div class="skc${i ? '' : ' basic'}"><span class="key">${SKILL_KEYS[i]}</span><b>${S.name}</b>
         <small>${TYPE_NAME[S.type] || ''}${S.el ? ' · ' + ELEMENTS[S.el].name : ''} · ${S.cd}초</small></div>`).join('')}</div>
       <p class="sub">${C.desc}</p>
@@ -277,9 +279,26 @@ export function chars(h) {
     bind('.pick', () => { SV.setChar(sel); h.onChar?.(sel); draw(sel); });
     bind('.buy', () => { if (!confirm(`${C.name}을(를) ${C.price.toLocaleString()} G로 바로 영입할까요?\n(뽑기 상자로 얻는 편이 훨씬 싸요)`)) return; if (SV.buyChar(sel)) { sfx('buy'); toast(`${C.name} 영입 완료!`); h.onChar?.(sel); } draw(sel); });
     bind('.gobox', () => h.go('boxes'));
+    bind('.lvup', () => { if (SV.levelUp(sel)) { sfx('buy'); toast(`${C.name} 레벨 ${SV.heroLv(sel)}!`); h.onChar?.(sel); } draw(sel); });
     bind('.back', () => h.back());
   };
   draw();
+}
+
+// 영웅 레벨: 능력치 표 + P.P 막대 + 레벨업 버튼
+function levelBox(c, own) {
+  const lv = own ? SV.heroLv(c) : 1, max = lv >= HERO_LV.max;
+  const cur = heroStats(c, lv), nxt = heroStats(c, Math.min(HERO_LV.max, lv + 1));
+  const pp = SV.heroPP(c), need = HERO_LV.pp[lv] || 0, cost = HERO_LV.gold[lv] || 0, gold = SV.S().gold;
+  const fmt = (k, v) => (k === 'crit' ? v.toFixed(1) : Math.round(v)) + (k === 'crit' || k === 'critDmg' ? '%' : '');
+  return `<div class="lvbox">
+    <div class="lvhead"><b class="lvnum">Lv ${lv}</b><span class="lvmax">/ ${HERO_LV.max}</span>
+      ${own && !max ? `<div class="ppbar"><i style="width:${Math.min(100, (pp / need) * 100)}%"></i><span>⚡ ${pp} / ${need} P.P</span></div>` : own ? '<span class="maxed">최고 레벨!</span>' : '<span class="maxed">영입하면 레벨을 올릴 수 있어요</span>'}
+    </div>
+    <div class="stats">${STAT_NAMES.map(([k, n, ic]) => `<div><span>${ic} ${n}</span><b>${fmt(k, cur[k])}</b>${own && !max ? `<em>→ ${fmt(k, nxt[k])}</em>` : ''}</div>`).join('')}</div>
+    ${own && !max ? `<button class="big lvup" ${SV.canLevel(c) ? '' : 'disabled'}>⬆ 레벨업 · 💰 ${cost.toLocaleString()} G${pp < need ? '<small>P.P가 부족해요 — 뽑기 상자에서 모아요</small>' : gold < cost ? `<small>골드 ${(cost - gold).toLocaleString()} 부족</small>` : ''}</button>` : ''}
+    <p class="sub tiny">레벨 능력치는 스토리 모드에서만 적용돼요 (콜로세움은 공정하게 Lv1). 방어막은 스테이지 시작·부활 때 가득 차고, 쌓일 %를 먼저 막아 줘요.</p>
+  </div>`;
 }
 
 // ---------- 뽑기 상자 ----------
@@ -293,7 +312,7 @@ export function boxes(h) {
   show(`
     <div class="panel wide boxshop">
       <div class="head"><button class="back">← 뒤로</button><h2>뽑기 상자</h2><span class="gold">💰 ${s.gold.toLocaleString()} G</span></div>
-      <p class="sub center">상자 한 칸마다 <b>아직 없는 영웅</b>이 나올 수 있어요. 안 나오면 골드! 영웅이 안 나올수록 <b>행운</b>이 쌓여 확률이 올라가요.</p>
+      <p class="sub center">상자 한 칸마다 <b>아직 없는 영웅</b>이 나올 수 있어요. 안 나오면 <b>⚡ P.P</b>(영웅 레벨업 재료) 또는 골드! 영웅이 안 나올수록 <b>행운</b>이 쌓여 확률이 올라가요.</p>
       <div class="boxes">${Object.entries(BOXES).map(([k, B]) => `
         <div class="boxcard" style="--bc:${B.color}">
           ${chestHtml(B.color, 'small ' + k)}
@@ -349,7 +368,13 @@ function openBox(h, key, drops) {
     setTimeout(() => {
       busy = false;
       setLeft(); glow();
-      if (d.t === 'gold') {
+      if (d.t === 'pp') {
+        sfx('gold');
+        const C = CHARS[d.c];
+        rev.innerHTML = `<div class="dcard ppc" style="--c:${C.color}"><span class="bslot"></span><b>⚡ +${d.n} P.P</b><small>${C.name}</small></div>`;
+        rev.querySelector('.bslot').appendChild(portrait(d.c, 64, true));
+        root.classList.remove('herofx');
+      } else if (d.t === 'gold') {
         sfx('gold');
         rev.innerHTML = `<div class="dcard gold ${d.jackpot ? 'jack' : ''}"><span class="coin">💰</span><b>+${d.n} G</b>${d.jackpot ? '<small>잭팟!</small>' : ''}</div>`;
         root.classList.remove('herofx');
@@ -373,12 +398,14 @@ function openBox(h, key, drops) {
   const summary = () => {
     const gold = drops.filter((d) => d.t === 'gold').reduce((a, d) => a + d.n, 0);
     const hs = drops.filter((d) => d.t === 'hero');
+    const pps = {}; for (const d of drops) if (d.t === 'pp') pps[d.c] = (pps[d.c] || 0) + d.n;
     const s = SV.S();
     root.classList.remove('herofx');
     root.innerHTML = `<div class="panel small sumbox">
       <h2>${B.name}</h2>
       <div class="sumlist">
         ${hs.map((d) => `<div class="sh" style="--r:${RARITY[CHARS[d.c].rarity].color}" data-c="${d.c}"><span class="pslot"></span><b>${CHARS[d.c].name}</b><small>${RARITY[CHARS[d.c].rarity].name}</small></div>`).join('')}
+        ${Object.entries(pps).map(([c, n]) => `<div class="sp" data-c="${c}"><span class="pslot"></span><b>⚡+${n}</b><small>${CHARS[c].name}</small></div>`).join('')}
         <div class="sg">💰 <b>+${gold} G</b></div>
       </div>
       ${hs.length ? '' : `<p class="sub">이번엔 영웅이 없었어요… 🍀 행운이 쌓였어요 (${GACHA.pity - s.pity}칸 안에 확정)</p>`}
@@ -389,6 +416,7 @@ function openBox(h, key, drops) {
       </div>
     </div>`;
     root.querySelectorAll('.sh').forEach((e) => e.querySelector('.pslot').appendChild(portrait(e.dataset.c, 56, true)));
+    root.querySelectorAll('.sp').forEach((e) => e.querySelector('.pslot').appendChild(portrait(e.dataset.c, 40, true)));
     bind('.use', (b) => { SV.setChar(b.dataset.c); h.onChar?.(b.dataset.c); toast(`${CHARS[b.dataset.c].name}(으)로 출전!`); boxes(h); });
     bind('.again', () => { const d2 = SV.openBox(key); if (d2) { h.onGold?.(); openBox(h, key, d2); } });
     bind('.back', () => boxes(h));
@@ -398,15 +426,89 @@ function openBox(h, key, drops) {
   addEventListener('keydown', onKey);
 }
 
+// ---------- 설정 ----------
+export function settings(h) {
+  const s = SV.S();
+  const L = SV.loadLayout();
+  show(`
+    <div class="panel">
+      <div class="head"><button class="back">← 뒤로</button><h2>설정</h2><span></span></div>
+      <div class="setrow"><div><b>🔊 소리</b><small>효과음 켜기 / 끄기</small></div><button class="toggle snd ${s.muted ? '' : 'on'}">${s.muted ? '꺼짐' : '켜짐'}</button></div>
+      <div class="setrow"><div><b>🕹️ 조작 버튼 배치</b><small>조이스틱과 스킬 버튼의 위치·크기·투명도를 마음대로 (터치 화면용, 이 기기에 저장) · 지금: ${L ? '내 배치' : '기본 배치'}</small></div><button class="edit">편집</button></div>
+      ${L ? '<div class="setrow"><div><b>↩️ 기본 배치로</b><small>내가 정한 배치를 지우고 처음 모양으로</small></div><button class="reset">되돌리기</button></div>' : ''}
+      <h3>조작</h3>
+      <p class="sub">PC: WASD 이동 · 마우스 조준 · 클릭 공격 · Q E R 스킬 · Space 대시 · 증강은 1 2 3<br>모바일: 왼쪽 조이스틱 이동 · 오른쪽 버튼 (가장 가까운 적을 자동 조준)</p>
+    </div>`);
+  bind('.back', () => h.back());
+  bind('.snd', () => { h.setMute(!SV.S().muted); settings(h); });
+  bind('.edit', () => layoutEdit(h));
+  bind('.reset', () => { SV.saveLayout(null); h.onLayout?.(); toast('기본 배치로 되돌렸어요'); settings(h); });
+}
+// 조작 배치 편집: 끌어서 옮기고, 고른 것의 크기와 전체 투명도를 슬라이더로
+export function layoutEdit(h) {
+  const L = structuredClone(SV.loadLayout() || SV.DEFAULT_LAYOUT);
+  const names = { stick: '이동', atk: '공격', s1: '스킬1', s2: '스킬2', s3: '궁극기', dash: '대시' };
+  let sel = 'atk';
+  show(`
+    <div class="lay">
+      <div class="grid"></div>
+      <div class="hint">버튼을 끌어서 옮기세요<br>누른 버튼의 크기는 위에서 조절</div>
+      ${Object.keys(names).map((k) => `<div class="ctl ${k}" data-k="${k}"><span>${k === 'stick' ? '' : names[k]}</span></div>`).join('')}
+      <div class="bar">
+        <b class="selname"></b>
+        <label>크기 <input type="range" class="size" min="60" max="170" step="5"></label>
+        <label>투명도 <input type="range" class="alpha" min="30" max="100" step="5"></label>
+        <button class="mini def">기본값</button>
+        <button class="mini cancel">취소</button>
+        <button class="mini save" style="background:#2e7d32;border-color:#66bb6a">저장</button>
+      </div>
+    </div>`);
+  const root = $menu.querySelector('.lay');
+  const W = () => root.clientWidth, H = () => root.clientHeight;
+  const size = root.querySelector('.size'), alpha = root.querySelector('.alpha'), selname = root.querySelector('.selname');
+  const draw = () => {
+    root.querySelectorAll('.ctl').forEach((el) => {
+      const k = el.dataset.k, P = L[k], d = SV.CONTROL_BASE[k] * P.s;
+      Object.assign(el.style, { left: `${P.x * W() - d / 2}px`, top: `${P.y * H() - d / 2}px`, width: `${d}px`, height: `${d}px`, opacity: L.alpha });
+      el.classList.toggle('sel', k === sel);
+    });
+    size.value = Math.round(L[sel].s * 100); alpha.value = Math.round((L.alpha ?? 1) * 100);
+    selname.textContent = names[sel];
+  };
+  root.querySelectorAll('.ctl').forEach((el) => {
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      sel = el.dataset.k; draw();
+      el.setPointerCapture(e.pointerId);
+      const r = root.getBoundingClientRect();
+      const move = (ev) => {
+        const P = L[sel], half = (SV.CONTROL_BASE[sel] * P.s) / 2;
+        P.x = Math.min(1 - half / W(), Math.max(half / W(), (ev.clientX - r.left) / W()));
+        P.y = Math.min(1 - half / H(), Math.max(half / H(), (ev.clientY - r.top) / H()));
+        draw();
+      };
+      const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); };
+      el.addEventListener('pointermove', move); el.addEventListener('pointerup', up);
+    });
+  });
+  size.addEventListener('input', () => { L[sel].s = size.value / 100; draw(); });
+  alpha.addEventListener('input', () => { L.alpha = alpha.value / 100; draw(); });
+  bind('.def', () => { Object.assign(L, structuredClone(SV.DEFAULT_LAYOUT)); draw(); });
+  bind('.cancel', () => settings(h));
+  bind('.save', () => { SV.saveLayout(L); h.onLayout?.(); toast('조작 배치를 저장했어요'); settings(h); });
+  addEventListener('resize', draw, { once: true });
+  draw();
+}
+
 // ---------- 스토리 장 선택 ----------
 export function story(h) {
   const s = SV.S();
   const best = s.stats.best || 0;
-  const bestTxt = best >= 16 ? '모든 장 돌파!' : best ? `${Math.floor((best - 1) / 5) + 1}-${((best - 1) % 5) + 1}` : '아직 없음';
+  const bestTxt = best > CHAPTERS.length * 5 ? '모든 장 돌파!' : best ? `${Math.floor((best - 1) / 5) + 1}-${((best - 1) % 5) + 1}` : '아직 없음';
   show(`
     <div class="panel">
       <div class="head"><button class="back">← 뒤로</button><h2>스토리 모드</h2><span class="gold">💰 ${s.gold} G</span></div>
-      <p class="sub">모험은 언제나 <b>1-1</b>부터 시작해서, 쓰러지지 않는 한 <b>3-5</b>까지 쉬지 않고 이어집니다.<br>
+      <p class="sub">모험은 언제나 <b>1-1</b>부터 시작해서, 쓰러지지 않는 한 <b>${CHAPTERS.length}-5</b>까지 쉬지 않고 이어집니다.<br>
       증강은 한 판 동안 계속 쌓이고, 전멸하면 처음부터! 모은 골드는 스킬 트리와 영웅 영입에 쓰세요.</p>
       <div class="route">${CHAPTERS.map((C, i) => `<div class="rch" style="--f:${C.floor[0]};--w:${C.wallTop}"><b>${i + 1}장</b><small>${C.name}</small><span>${[1, 2, 3, 4, 5].map((n) => `<i class="${n === 5 ? 'boss' : ''} ${best >= i * 5 + n ? 'done' : ''}"></i>`).join('')}</span></div>`).join('<span class="rarrow">▶</span>')}</div>
       <p class="sub center">🏆 최고 기록: <b>${bestTxt}</b> · 완주 ${s.stats.wins || 0}회</p>
@@ -507,7 +609,7 @@ export function guide(h) {
       <p class="sub">영웅은 체력 대신 <b>%</b>가 쌓입니다. %가 높을수록 멀리 날아가고, 맵 밖·구덩이(공허)에 떨어지면 목숨이 하나 줄어요. 목숨을 다 잃으면 탈락!<br>
       많이 맞은 쪽은 <b>분노</b>로 조금 더 세게 칩니다. 떨어질 만큼 강하게 맞으면 화면이 멈추며 「KO 확정」 연출이 나와요. 시간이 지나면 땅이 무너지고, 새 땅이 솟고, 가로로 긴 땅이 세로로 뒤틀리기도 해요. 지도의 벽·구덩이·가시는 매번 달라집니다.</p>
       <h3>성장</h3>
-      <p class="sub"><b>1-1 · 1-3 · 2-3 · 3-3</b>을 깨면 증강 3개 중 1개, <b>1-5 · 2-5 보스</b>를 쓰러뜨리면 <b>전설 증강</b>! 같은 증강은 한 번만 고를 수 있어요. 스테이지를 깨면 가운데 바닥에서 <b>빛의 문</b>이 솟아오르고, 증강을 고르면 문이 열립니다. 상자에서는 골드와 함께 아이템이 나와요.</p>
+      <p class="sub"><b>1-1 · 1-3 · 2-3 · 3-3 · 4-3</b>을 깨면 증강 3개 중 1개, <b>1-5 · 2-5 · 3-5 보스</b>를 쓰러뜨리면 <b>전설 증강</b>! 4장에서는 <b>꼬마 눈사람</b>이 함께 싸워 주지만, 곳곳의 <b>빙판</b>에서는 미끄러져요. 같은 증강은 한 번만 고를 수 있어요. 스테이지를 깨면 가운데 바닥에서 <b>빛의 문</b>이 솟아오르고, 증강을 고르면 문이 열립니다. 상자에서는 골드와 함께 아이템이 나와요.</p>
       <div class="reacts">${Object.values(ITEMS).map((I) => `<div><b style="color:${I.color}">${I.name}</b><small>${I.desc}</small></div>`).join('')}</div>
       <h3>원소 충돌</h3>
       <p class="sub">투사체끼리 부딪히면 힘이 센 쪽이 이깁니다. 서로 다른 원소면 그 자리에서 충돌 폭발.</p>

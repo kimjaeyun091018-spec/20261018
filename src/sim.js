@@ -7,7 +7,7 @@
 import {
   TILE, COLS, ROWS, KNOCK, FEEL, DASH, STATUS, REACTIONS, CLASH, CHARS, ENEMIES, BOSSES,
   CHAPTERS, STAGES_PER_CHAPTER, STORY, TREE, COLOSSEUM, TEAM_COLORS, MAX_PLAYERS,
-  COLLAPSE, LEVEL, ITEMS, CHEST_LOOT, COLO_LOOT, AUGMENTS, AUG_STAGES,
+  COLLAPSE, LEVEL, ITEMS, CHEST_LOOT, COLO_LOOT, AUGMENTS, AUG_STAGES, ALLY, ICE, HERO_GROW, heroStats,
 } from './data.js';
 import { COLOSSEUM_ARENAS } from './maps.js';
 import { genStoryMap, fpOf, planShift, shiftTiles, inFp, CORE } from './mapgen.js';
@@ -74,7 +74,7 @@ export function createState(mode, hostId, opt = {}) {
   const s = {
     mode, hostId, time: 0, nextId: 1, runId: Math.floor(Math.random() * 1e9),
     heroes: {}, enemies: [], shots: [], zones: [], hazards: [], pending: [], fx: [], items: [],
-    msg: '', msgT: 0, gold: 0, map: null, fp: null, shift: null, warns: [], holes: [], stageN: 0,
+    msg: '', msgT: 0, gold: 0, map: null, fp: null, shift: null, warns: [], holes: [], stageN: 0, ice: new Map(), allies: [],
     xp: 0, level: 1, kills: 0,
     story: null, colo: null, opt,
   };
@@ -109,6 +109,12 @@ function recompute(s, h) {
       else b[k] += v;
     }
   }
+  // 영웅 고유 치명타 + 레벨 성장 (레벨은 스토리에서만)
+  const story = s.mode === 'story';
+  const lv = story ? h.lv || 1 : 1, k = lv - 1, st = heroStats(h.char, lv);
+  b.crit += st.crit / 100 - 0.05; b.critDmg += st.critDmg / 100 - 0.5;
+  if (story) { b.hp += HERO_GROW.hp * k; b.atk += HERO_GROW.atk * k; b.spd += HERO_GROW.spd * k; }
+  h.shieldMax = story ? st.shield : 0;
   h.b = b;
   const C = CHARS[h.char];
   h.weight = C.weight * (1 + b.weight);
@@ -123,7 +129,7 @@ export function addHero(s, id, name, char, opt = {}) {
   const h = {
     kind: 'hero', id, name: String(name || '플레이어').slice(0, 10), char: C, bot: !!opt.bot, slot,
     team: s.mode === 'colosseum' ? (opt.team ?? (slot % 2) + 1) : 1, color: TEAM_COLORS[slot % 4],
-    x: 0, y: 0, r: R_HERO, kvx: 0, kvy: 0, pct: 0, weight: CHARS[C].weight, tree: opt.tree || [], augs: [],
+    x: 0, y: 0, r: R_HERO, kvx: 0, kvy: 0, pct: 0, weight: CHARS[C].weight, tree: opt.tree || [], augs: [], lv: Math.max(1, Math.min(10, opt.lv | 0 || 1)), shield: 0, ivx: 0, ivy: 0,
     aim: 0, aimD: 200, cds: [0, 0, 0, 0], chainI: -1, chainT: 0, dashCh: 1, dashCd: 0, roll: null,
     dash: null, chan: null, snipe: null, empower: 0, stun: 0, inv: 1, hs: 0, flash: 0, st: {}, slowT: 0,
     fall: 0, alive: true, out: false, respawn: 0, stocks: s.mode === 'story' ? STORY.lives : COLOSSEUM.stocks, moving: false,
@@ -132,16 +138,19 @@ export function addHero(s, id, name, char, opt = {}) {
   };
   recompute(s, h);
   h.dashCh = h.dashMax;
+  h.shield = h.shieldMax;
   placeHero(s, h);
   s.heroes[id] = h;
+  if (s.mode === 'story' && CHAPTERS[s.story?.ch]?.ally) addAlly(s, h);
   return h;
 }
-export function removeHero(s, id) { delete s.heroes[id]; }
-export function setHeroChar(s, id, char, tree) {
+export function removeHero(s, id) { delete s.heroes[id]; s.allies = s.allies.filter((a) => a.owner !== id); }
+export function setHeroChar(s, id, char, tree, lv) {
   const h = s.heroes[id];
   if (!h || !CHARS[char]) return;
   h.char = char;
   if (tree) h.tree = tree;
+  if (lv) h.lv = Math.max(1, Math.min(10, lv | 0));
   recompute(s, h);
 }
 function placeHero(s, h) {
@@ -190,6 +199,11 @@ function hit(s, t, opt) {
   if (t.kind === 'hero') {
     let add = dmg * (story ? STORY.pctPerDmg / (1 + t.b.hp + t.b.endure) : KNOCK.colosseumPct);
     if (t.buf.aegis > 0) add *= 0.5;
+    if (t.shield > 0 && !opt.dot) { // 방어막이 먼저 막아 줌
+      const ab = Math.min(t.shield, add);
+      t.shield -= ab; add -= ab;
+      fxPush(s, { k: t.shield > 0 ? 'shieldhit' : 'shieldbreak', x: t.x, y: t.y, t: 0.4 });
+    }
     t.pct = Math.min(999, Math.round((t.pct + add) * 10) / 10);
     t.hitPop = 1;
   } else {
@@ -363,7 +377,7 @@ function moveBody(s, u, wx, wy, dt) {
     }
     u.x = nx; u.y = ny;
   }
-  const f = Math.exp(-KNOCK.friction * dt);
+  const f = Math.exp(-KNOCK.friction * (u.kind === 'hero' && onIce(s, u) ? ICE.kbFriction : 1) * dt);
   u.kvx *= f; u.kvy *= f;
   if (Math.hypot(u.kvx, u.kvy) < 8) u.kvx = u.kvy = 0;
   u.spikeCd = Math.max(0, (u.spikeCd || 0) - dt);
@@ -639,6 +653,7 @@ function updateShots(s, dt) {
       } else fxPush(s, { k: 'clash', x: mx, y: my, e1: a.el, e2: b.el, t: 0.2 });
     }
   }
+  for (const p of s.shots) if (p.life <= 0 && p.ice) makeIce(s, p.x, p.y, p.ice);
   s.shots = s.shots.filter((p) => p.life > 0);
 }
 
@@ -804,7 +819,15 @@ function updateHero(s, h, inp, dt) {
   }
   const speed = frozenOrStunned(h) ? 0 : C.speed * (1 + (s.mode === 'story' ? h.b.spd : 0)) * (h.buf.swift > 0 ? 1.35 : 1) * speedMul(h) * (h.chan ? h.chan.S.slow : 1);
   h.moving = ml > 0.1 && speed > 0;
-  moveBody(s, h, mx * speed, my * speed, dt);
+  if (onIce(s, h)) {
+    // 빙판: 걷기 속도가 천천히 붙고, 손을 떼도 계속 미끄러짐
+    const k = 1 - Math.exp(-ICE.accel * dt);
+    h.ivx += (mx * speed - h.ivx) * k; h.ivy += (my * speed - h.ivy) * k;
+    moveBody(s, h, h.ivx, h.ivy, dt);
+  } else {
+    h.ivx = mx * speed; h.ivy = my * speed;
+    moveBody(s, h, h.ivx, h.ivy, dt);
+  }
   if (h.fall > 0 || frozenOrStunned(h)) return;
   if (inp.atk) useSkill(s, h, 0);
   if (inp.s1) useSkill(s, h, 1);
@@ -879,7 +902,7 @@ function heroFell(s, h) {
 }
 function respawnHero(s, h) {
   placeHero(s, h);
-  Object.assign(h, { alive: true, out: false, pct: 0, inv: 2, stun: 0, dash: null, chan: null, snipe: null, roll: null, fall: 0, st: {}, lastBy: null });
+  Object.assign(h, { alive: true, out: false, pct: 0, inv: 2, stun: 0, dash: null, chan: null, snipe: null, roll: null, fall: 0, st: {}, lastBy: null, shield: h.shieldMax, ivx: 0, ivy: 0 });
   fxPush(s, { k: 'respawn', x: h.x, y: h.y, color: h.color, t: 0.8 });
   if (s.mode === 'story' && h.b.rebirth) {
     for (const t of foesOf(s, h.team)) if (dist(t, h) < 130 + t.r) hit(s, t, { dmg: 26, kb: [300, 380], el: 'fire', ux: t.x - h.x || 1, uy: t.y - h.y, by: h, proc: true });
@@ -1092,10 +1115,14 @@ function makeEnemy(s, kind, x, y, scale = { hp: 1, dmg: 1 }) {
 function makeBoss(s, key, x, y, scale) {
   const B = BOSSES[key];
   const hp = Math.round(B.hp * scale.hp * (1 + 0.5 * (Object.keys(s.heroes).length - 1)));
-  return {
+  const e0 = {
     kind: 'enemy', boss: key, type: key, ai: 'boss', id: s.nextId++, team: 'E', x, y, r: B.r, kvx: 0, kvy: 0, hp, maxHp: hp, pct: 0, weight: B.weight,
     stun: 0, inv: 0.5, hs: 0, flash: 0, st: {}, fall: 0, dead: false, cd: 0, face: 0, t: 0, dmgMul: scale.dmg, slowT: 0, patT: 2, patI: 0, act: null,
+    gen: 0, pool: hp, future: 0,
   };
+  // 분열하는 보스: 첫 몸은 전체 체력의 일부만, 나머지는 자식들 몫
+  if (B.split) { const P = B.split; e0.maxHp = e0.hp = Math.round(hp * P.share[0]); e0.future = hp * P.share[1] * 2 + hp * P.share[2] * 4; }
+  return e0;
 }
 function killEnemy(s, e, by, fell = false) {
   if (e.dead) return;
@@ -1106,7 +1133,28 @@ function killEnemy(s, e, by, fell = false) {
   if (s.mode === 'story') {
     if (E) { giveGold(s, E.gold + (fell ? 1 : 0), e.x, e.y); giveXp(s, E.xp); if (Math.random() < 0.05 && !fell) dropItem(s, 'potion', e.x, e.y); }
     for (const h of heroList(s)) if (h.b.leech && isUnit(h)) h.pct = Math.max(0, h.pct - h.b.leech);
+    const killer = by || s.heroes[e.lastBy];
+    if (killer?.b?.killCd) { killer.cds = killer.cds.map((c) => Math.max(0, c - killer.b.killCd)); fxPush(s, { k: 'cdr', x: killer.x, y: killer.y, t: 0.5 }); }
   }
+  if (e.boss) bossSplit(s, e);
+}
+// 슬라임 왕 분열: 작은 왕 2마리 (세대마다 작아짐)
+function bossSplit(s, e) {
+  const B = BOSSES[e.boss];
+  if (!B.split || (e.gen || 0) >= B.split.gens) return;
+  const g = (e.gen || 0) + 1, P = B.split;
+  for (const side of [-1, 1]) {
+    const a = Math.random() * Math.PI * 2;
+    const c = makeBoss(s, e.boss, e.x + side * e.r * 0.6, e.y, { hp: 1, dmg: e.dmgMul });
+    c.gen = g; c.r = B.r * P.size[g]; c.weight = B.weight * P.size[g];
+    c.maxHp = c.hp = Math.max(1, Math.round(e.pool * P.share[g]));
+    c.pool = e.pool; c.future = g < P.gens ? e.pool * P.share[g + 1] * 2 : 0;
+    c.kvx = Math.cos(a) * 60 + side * 320; c.kvy = Math.sin(a) * 160;
+    c.inv = 0.6; c.patT = 1.2 + Math.random(); c.patI = Math.floor(Math.random() * 3); c.dmgMul = e.dmgMul;
+    s.enemies.push(c);
+  }
+  fxPush(s, { k: 'bosssplit', x: e.x, y: e.y, color: B.color, t: 0.8, shake: 8 });
+  say(s, g === 1 ? '슬라임 왕이 둘로 갈라졌다!' : '더 작게 갈라졌다!', 1.4);
 }
 function giveGold(s, n, x, y) {
   const mul = 1 + Math.max(0, ...heroList(s).map((h) => h.b.gold));
@@ -1115,8 +1163,10 @@ function giveGold(s, n, x, y) {
   fxPush(s, { k: 'gold', x, y, v, t: 0.9 });
 }
 function enemyShot(s, e, a, F) {
-  const S = { speed: F.speed, r: 7, power: 1, dmg: F.dmg * e.dmgMul, kb: [120, 160], life: 3, look: F.look, home: F.home || 0 };
-  return spawnShot(s, e, S, a);
+  const S = { speed: F.speed, r: F.r || 7, power: 1, dmg: F.dmg * e.dmgMul, kb: F.kb || [120, 160], life: F.life || 3, look: F.look, home: F.home || 0, el: F.el };
+  const p = spawnShot(s, e, S, a);
+  if (F.ice) p.ice = F.ice;
+  return p;
 }
 function contact(s, e, t, dmg, kb) {
   if (e.cd > 0 || !t || dist(e, t) > e.r + t.r + 3 || t.inv > 0) return;
@@ -1206,8 +1256,9 @@ function updateEnemy(s, e, dt) {
         if (e.slamT > 0) {
           e.slamT -= dt;
           if (e.slamT <= 0) {
-            for (const u of heroList(s).filter(isUnit)) if (dist(u, e) < E.slam.r + u.r) hit(s, u, { dmg: E.slam.dmg * e.dmgMul, kb: E.slam.kb, ux: u.x - e.x, uy: u.y - e.y, src: e });
-            fxPush(s, { k: 'slam', x: e.x, y: e.y, r: E.slam.r, t: 0.6, shake: 10 });
+            for (const u of heroList(s).filter(isUnit)) if (dist(u, e) < E.slam.r + u.r) hit(s, u, { dmg: E.slam.dmg * e.dmgMul, kb: E.slam.kb, ux: u.x - e.x, uy: u.y - e.y, src: e, el: E.slam.ice ? 'ice' : undefined });
+            fxPush(s, { k: 'slam', x: e.x, y: e.y, r: E.slam.r, t: 0.6, shake: 10, el: E.slam.ice ? 'ice' : undefined });
+            if (E.slam.ice) makeIce(s, e.x, e.y, E.slam.ice);
           }
         } else {
           wx = ux * sp; wy = uy * sp;
@@ -1245,6 +1296,8 @@ function updateEnemy(s, e, dt) {
 // ---------- 보스 ----------
 function updateBoss(s, e, dt) {
   const B = BOSSES[e.boss];
+  if (B.roll) { updateSnowHead(s, e, dt); return; }
+  if (B.splitAt && !e.split && e.hp < e.maxHp * B.splitAt && !e.act) { snowSplit(s, e); return; }
   const t = nearestHero(s, e);
   const half = e.hp < e.maxHp / 2;
   let wx = 0, wy = 0;
@@ -1254,7 +1307,7 @@ function updateBoss(s, e, dt) {
     if (A.type === 'jump') {
       const k = 1 - A.t / A.T;
       e.x = A.sx + (A.tx - A.sx) * k; e.y = A.sy + (A.ty - A.sy) * k; e.z = Math.sin(Math.PI * k) * 90;
-      if (A.t <= 0) { e.z = 0; bossBlast(s, e, 120, 26, [260, 360]); }
+      if (A.t <= 0) { e.z = 0; bossBlast(s, e, A.r || 120, A.dmg || 26, A.kb || [260, 360]); if (A.ice) makeIce(s, e.x, e.y, A.ice); }
     } else if (A.type === 'dash') {
       if (A.t <= A.go) { wx = Math.cos(A.a) * 520; wy = Math.sin(A.a) * 520; contactBoss(s, e, 22, [280, 380]); }
     } else if (A.type === 'laser') {
@@ -1274,7 +1327,7 @@ function updateBoss(s, e, dt) {
     contactBoss(s, e, B.touch, [240, 320]);
     e.patT -= dt;
     if (e.patT <= 0) {
-      e.patT = half ? 1.9 : 2.6;
+      e.patT = B.every ? B.every[half ? 1 : 0] : half ? 1.9 : 2.6;
       bossPattern(s, e, B.pats[e.patI++ % B.pats.length], t, half);
     }
   }
@@ -1315,6 +1368,25 @@ function bossPattern(s, e, pat, t, half) {
     case 'dash': e.act = { type: 'dash', t: 1.25, go: 0.5, a: a0 }; fxPush(s, { k: 'warnline', x: e.x, y: e.y, a: a0, len: 520, w: e.r * 2, t: 0.75 }); break;
     case 'laser': e.act = { type: 'laser', t: 3, T: 3, a: a0 - 1, spin: half ? 1.1 : 0.8 }; break;
     case 'slam': fxPush(s, { k: 'warn', x: e.x, y: e.y, r: 160, t: 0.9 }); s.hazards.push({ x: e.x, y: e.y, r: 160, t: 0.9, dmg: 24 * e.dmgMul, kb: [300, 420], follow: e.id }); break;
+    case 'snowball': { // 커다란 눈덩이를 영웅들 쪽으로 던짐 → 떨어진 자리 빙판
+      const tg = heroList(s).filter(isUnit);
+      for (let i = 0; i < (half ? 6 : 4); i++) {
+        const h = tg[i % Math.max(1, tg.length)] || t;
+        s.hazards.push({ x: h.x + rnd(-90, 90), y: h.y + rnd(-90, 90), r: 58, t: 1.1 + i * 0.12, dmg: 14 * e.dmgMul, kb: [230, 300], el: 'ice', ice: 1.6, snow: true });
+      }
+      break;
+    }
+    case 'icering': { const n = half ? 18 : 14; for (let i = 0; i < n; i++) enemyShot(s, e, (i / n) * Math.PI * 2 + s.time, { dmg: 9, speed: 230, look: 'shard', el: 'ice', ice: 0.9 }); break; }
+    case 'summonsnow': for (let i = 0; i < 2; i++) { const p = randomFloor(s, 14, [e], 80); s.pending.push({ t: 0.7, do: 'spawn', kind: 'frostwisp', x: p.x, y: p.y, scale: { hp: e.dmgMul, dmg: e.dmgMul } }); fxPush(s, { k: 'spawnwarn', x: p.x, y: p.y, t: 0.7 }); } break;
+    case 'stomp': { // 몸통: 영웅 쪽으로 뛰어올라 짓밟음
+      let tx = t.x + t.kvx * 0.3, ty = t.y + t.kvy * 0.3;
+      if (!safeFloor(s.map, tx, ty, e.r * 0.5)) { tx = t.x; ty = t.y; }
+      if (!safeFloor(s.map, tx, ty, e.r * 0.5)) { const p = randomFloor(s, e.r * 0.5, null, 0, true); tx = p.x; ty = p.y; }
+      const T = half ? 0.75 : 0.9;
+      e.act = { type: 'jump', t: T, T, sx: e.x, sy: e.y, tx, ty, r: 100, dmg: 24, kb: [280, 380], ice: 1.5 };
+      fxPush(s, { k: 'warn', x: tx, y: ty, r: 100, t: T });
+      break;
+    }
     case 'drill': { // 영웅들 발밑에 구멍 (3x3, 반피 이하면 5칸 십자 더)
       const idx = [];
       for (const h of heroList(s).filter(isUnit).slice(0, 4)) {
@@ -1346,11 +1418,132 @@ function updateHazards(s, dt) {
     z.t -= dt;
     if (z.follow) { const e = s.enemies.find((u) => u.id === z.follow); if (e) { z.x = e.x; z.y = e.y; } }
     if (z.t <= 0) {
-      for (const h of heroList(s).filter(isUnit)) if (Math.hypot(h.x - z.x, h.y - z.y) < z.r + h.r) hit(s, h, { dmg: z.dmg, kb: z.kb, ux: h.x - z.x || 1, uy: h.y - z.y });
-      fxPush(s, { k: 'slam', x: z.x, y: z.y, r: z.r, t: 0.5, shake: 6 });
+      for (const h of heroList(s).filter(isUnit)) if (Math.hypot(h.x - z.x, h.y - z.y) < z.r + h.r) hit(s, h, { dmg: z.dmg, kb: z.kb, ux: h.x - z.x || 1, uy: h.y - z.y, el: z.el });
+      fxPush(s, { k: z.ice ? 'snowburst' : 'slam', x: z.x, y: z.y, r: z.r, t: 0.5, shake: 6 });
+      if (z.ice) makeIce(s, z.x, z.y, z.ice);
     }
   }
   s.hazards = s.hazards.filter((z) => z.t > 0);
+}
+
+// ============================================================
+//  빙판 · 아군 꼬마 눈사람
+// ============================================================
+function onIce(s, u) {
+  if (!s.ice.size) return false;
+  const i = Math.floor(u.y / TILE) * COLS + Math.floor(u.x / TILE);
+  return s.ice.has(i);
+}
+// (x, y) 둘레 r칸을 얼림 (바닥 칸만)
+function makeIce(s, x, y, r, time = ICE.time) {
+  const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE), R = Math.ceil(r);
+  for (let oy = -R; oy <= R; oy++) for (let ox = -R; ox <= R; ox++) {
+    if (ox * ox + oy * oy > r * r + 0.3) continue;
+    const nx = tx + ox, ny = ty + oy;
+    if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) continue;
+    const c = s.map.tiles[ny][nx];
+    if (c === 'o' || c === '#') continue;
+    const i = ny * COLS + nx;
+    s.ice.set(i, Math.max(s.ice.get(i) || 0, time));
+  }
+}
+function updateIce(s, dt) {
+  if (!s.ice.size) return;
+  for (const [i, t] of s.ice) {
+    const nt = t - dt;
+    if (nt <= 0 || tileI(s, i) === 'o') s.ice.delete(i); else s.ice.set(i, nt);
+  }
+}
+function addAlly(s, h) {
+  if (s.allies.some((a) => a.owner === h.id)) return;
+  s.allies.push({ id: s.nextId++, kind: 'ally', owner: h.id, team: h.team, x: h.x - 24, y: h.y + 10, r: ALLY.minisnow.r, face: 0, throwT: rnd(0, 1), color: h.color, aimD: 200 });
+}
+function updateAllies(s, dt) {
+  const A = ALLY.minisnow;
+  for (const a of s.allies) {
+    const h = s.heroes[a.owner];
+    if (!h) continue;
+    // 주인 곁으로 (공허 위는 건너뛰지 않음: 멀어지면 순간 이동)
+    const side = (a.id % 2 ? 1 : -1);
+    const gx = h.x + side * 30, gy = h.y + 16;
+    const dx = gx - a.x, dy = gy - a.y, d = Math.hypot(dx, dy);
+    if (d > 260 || !h.alive) { if (h.alive && safeFloor(s.map, gx, gy, a.r)) { a.x = gx; a.y = gy; } }
+    else if (d > 6) {
+      const sp = Math.min(A.speed, d * 4) * dt;
+      const nx = a.x + (dx / d) * sp, ny = a.y + (dy / d) * sp;
+      if (!circleInWall(s.map, nx, ny, a.r) && tileAt(s.map, nx, ny) !== 'o') { a.x = nx; a.y = ny; }
+      else if (safeFloor(s.map, gx, gy, a.r) && d > 90) { a.x = gx; a.y = gy; }
+    }
+    // 가까운 적에게 눈덩이
+    a.throwT -= dt;
+    const t = foesOf(s, a.team).filter((e) => dist(e, a) < A.range && !e.spawning).sort((x, y) => dist(x, a) - dist(y, a))[0];
+    if (t) a.face = Math.atan2(t.y - a.y, t.x - a.x);
+    if (t && a.throwT <= 0 && h.alive) {
+      a.throwT = A.every;
+      const S = { ...A.shot, dmg: A.shot.dmg * (1 + (s.story?.ch || 0) * 0.5) };
+      spawnShot(s, a, S, a.face + rnd(-0.05, 0.05));
+      fxPush(s, { k: 'allythrow', x: a.x, y: a.y, a: a.face, t: 0.2 });
+    }
+  }
+}
+// 보스 체력 막대: [보스 종류, 남은 체력(분열·분리될 몫 포함), 전체]
+function bossBar(s) {
+  const bs = s.enemies.filter((e) => e.boss && !e.dead);
+  if (!bs.length) return null;
+  const main = bs.find((e) => !BOSSES[e.boss].part) || bs[0];
+  const key = BOSSES[main.boss].part ? 'snowman' : main.boss;
+  return [key, Math.ceil(bs.reduce((a, e) => a + Math.max(0, e.hp) + (e.future || 0), 0)), Math.round(main.pool || main.maxHp)];
+}
+// 눈보라 대왕: 절반 이하 → 몸통 + 머리로 분리
+function snowSplit(s, e) {
+  e.split = true; e.dead = true;
+  const rest = Math.max(1, e.hp);
+  const mk = (key, dx, share) => {
+    const c = makeBoss(s, key, e.x + dx, e.y, { hp: 1, dmg: e.dmgMul });
+    c.maxHp = c.hp = Math.round(rest * share); c.pool = e.pool; c.dmgMul = e.dmgMul; c.inv = 0.8; c.patT = 1.4;
+    return c;
+  };
+  const body = mk('snowbody', -10, 0.55), head = mk('snowhead', 0, 0.45);
+  head.y -= 40; head.kvx = 380; head.kvy = -60; head.roll = 0; head.dir = Math.random() * Math.PI * 2;
+  s.enemies.push(body, head);
+  fxPush(s, { k: 'bosssplit', x: e.x, y: e.y - 30, color: '#e1f5fe', snow: true, t: 1, shake: 14 });
+  say(s, '눈보라 대왕이 둘로 갈라졌다! 몸통은 짓밟고, 머리는 굴러다니며 냉기를 뿜는다!', 2.6);
+}
+// 머리: 굴러다니며 앞으로 냉기 → 지나간 자리·뿜은 자리가 빙판
+function updateSnowHead(s, e, dt) {
+  const B = BOSSES.snowhead;
+  const t = nearestHero(s, e);
+  e.breathT = (e.breathT || 0) - dt;
+  if (t && !frozenOrStunned(e)) {
+    // 대상 주위를 빙글 돌듯이 굴러감 (가끔 방향을 확 꺾음)
+    const to = Math.atan2(t.y - e.y, t.x - e.x);
+    e.turnT = (e.turnT || 0) - dt;
+    if (e.turnT <= 0) { e.turnT = rnd(1.2, 2.2); e.orbit = (Math.random() < 0.5 ? -1 : 1) * rnd(0.6, 1.1); }
+    const want = to + (dist(t, e) < 140 ? e.orbit * 1.4 : e.orbit * 0.5);
+    let da = want - e.dir; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+    e.dir += clamp(da, -2.6 * dt, 2.6 * dt);
+  }
+  const sp = B.speed * speedMul(e) * (e.hp < e.maxHp / 2 ? 1.25 : 1);
+  const x0 = e.x, y0 = e.y;
+  moveBody(s, e, Math.cos(e.dir) * sp, Math.sin(e.dir) * sp, dt);
+  const moved = Math.hypot(e.x - x0, e.y - y0);
+  if (moved < sp * dt * 0.3) e.dir += Math.PI * rnd(0.6, 1.4); // 벽에 부딪히면 튕김
+  e.roll = (e.roll || 0) + moved / e.r;
+  e.face = e.dir;
+  contactBoss(s, e, B.touch, [220, 300]);
+  // 냉기 뿜기 (앞쪽 부채꼴)
+  e.act = { type: 'breath', a: e.dir, t: 1 };
+  if (e.breathT <= 0) {
+    e.breathT = 0.16;
+    const L = 120;
+    for (let d = 30; d <= L; d += 30) makeIce(s, e.x + Math.cos(e.dir) * d, e.y + Math.sin(e.dir) * d, 0.5 + d / 200, 6);
+    for (const h of heroList(s).filter(isUnit)) {
+      const rx = h.x - e.x, ry = h.y - e.y, along = rx * Math.cos(e.dir) + ry * Math.sin(e.dir);
+      if (along < 0 || along > L + h.r || Math.abs(rx * Math.sin(e.dir) - ry * Math.cos(e.dir)) > 26 + along * 0.35 || (h.breathHitT || 0) > s.time) continue;
+      h.breathHitT = s.time + 0.45;
+      hit(s, h, { dmg: 4 * e.dmgMul, kb: [90, 110], el: 'ice', ux: Math.cos(e.dir), uy: Math.sin(e.dir) });
+    }
+  }
 }
 
 // ============================================================
@@ -1364,12 +1557,16 @@ export function startStage(s, ch, st) {
   s.mapKey = `${boss ? 'B' : 'S'}${s.stageN}-${ch}`;
   s.story = { ch, st, boss, wave: -1, phase: 'intro', t: 1.4, chest: null, portal: null, cleared: false, totalWaves: boss ? 1 : 3, time: 0 };
   initShift(s, boss ? STORY.bossCollapseAt : STORY.collapseAt, STORY.collapseEvery);
-  Object.assign(s, { enemies: [], shots: [], zones: [], hazards: [], pending: [], items: [], flow: null, flowT: 0 });
+  Object.assign(s, { enemies: [], shots: [], zones: [], hazards: [], pending: [], items: [], flow: null, flowT: 0, ice: new Map() });
   for (const h of heroList(s)) {
     if (h.out || !h.alive) { h.out = false; h.alive = true; h.stocks = Math.max(1, h.stocks); h.pct = 0; }
     placeHero(s, h);
     h.st = {}; h.inv = 1.2; h.chan = null; h.dash = null; h.snipe = null; h.roll = null; h.fall = 0; h.respawn = 0;
+    h.shield = h.shieldMax; h.ivx = h.ivy = 0;
   }
+  // 4장: 꼬마 눈사람이 영웅마다 하나씩
+  s.allies = [];
+  if (CHAPTERS[ch].ally) for (const h of heroList(s)) addAlly(s, h);
   say(s, `${ch + 1}-${st + 1} ${CHAPTERS[ch].name}${boss ? ' · 보스' : ''}`, 1.6);
 }
 function spawnWave(s) {
@@ -1541,6 +1738,8 @@ export function step(s, inputs, dt) {
   updateZones(s, dt);
   updateHazards(s, dt);
   updateItems(s, dt);
+  updateIce(s, dt);
+  updateAllies(s, dt);
   s.enemies = s.enemies.filter((e) => !e.dead);
   if (s.mode === 'story') updateStory(s, dt);
   else updateColosseum(s, dt);
@@ -1567,12 +1766,16 @@ export function snapshot(s) {
       ch: h.chan ? 1 : 0, ds: h.dash ? (h.dash.S.look || 1) : 0, ro: h.roll ? 1 : 0, sp: h.snipe ? 1 : 0, em: h.empower > 0 ? 1 : 0, st: stCode(h),
       cd: h.cds.map(r1), cm: [0, 1, 2, 3].map((i) => r1(cdOf(s, h, i))), dc: h.dashCh, dm: h.dashMax, cb: h.combo.n, mc: h.maxCombo, ko: h.kos, rs: r1(Math.max(0, h.respawn)), bot: h.bot ? 1 : 0,
       ln: Math.hypot(h.kvx, h.kvy) > 380 ? 1 : 0, ob: s.mode === 'story' ? h.b.orbs : 0, sz: r1(h.b.size || 0),
+      lv: h.lv, sh: h.shieldMax ? [Math.ceil(h.shield), h.shieldMax] : 0,
       bf: Object.keys(h.buf).join(','), au: h.augs, cho: h.choice ? { o: h.choice.opts, tier: h.choice.tier, t: Math.ceil(h.choice.t) } : null,
     })),
-    e: s.enemies.map((e) => [e.id, e.type, r1(e.x), r1(e.y), Math.ceil(e.hp), e.maxHp, r1(e.fall), e.flash > 0 ? 1 : 0, r1(e.face), stCode(e), e.spawning ? 1 : 0, r1(e.z || 0), e.boss ? 1 : 0, e.act ? e.act.type : 0, e.act?.a !== undefined ? r1(e.act.a) : 0, Math.hypot(e.kvx, e.kvy) > 380 ? 1 : 0, e.ai === 'shield' ? (shieldUp(e) ? e.mode + 1 : 4) : 0]),
+    e: s.enemies.map((e) => [e.id, e.type, r1(e.x), r1(e.y), Math.ceil(e.hp), e.maxHp, r1(e.fall), e.flash > 0 ? 1 : 0, r1(e.face), stCode(e), e.spawning ? 1 : 0, r1(e.z || 0), e.boss ? 1 : 0, e.act ? e.act.type : 0, e.act?.a !== undefined ? r1(e.act.a) : 0, Math.hypot(e.kvx, e.kvy) > 380 ? 1 : 0, e.ai === 'shield' ? (shieldUp(e) ? e.mode + 1 : 4) : 0, r1(e.r), e.z2 ? r1(e.z2) : 0]),
+    ic: [...s.ice.keys()],
+    al: s.allies.map((a) => [a.id, r1(a.x), r1(a.y), r1(a.face), a.color, a.throwT > 0.75 ? 1 : 0]),
+    bb: bossBar(s),
     s: s.shots.map((p) => [p.id, p.look, r1(p.x), r1(p.y), r1(Math.atan2(p.vy, p.vx)), p.r, p.el || 0, r1(p.z || 0), p.team === 'E' ? 1 : 0]),
     z: s.zones.map((z) => [z.id, z.look, r1(z.x), r1(z.y), z.r, r1(z.t), r1(z.life)]),
-    hz: s.hazards.map((z) => [r1(z.x), r1(z.y), z.r, r1(z.t)]),
+    hz: s.hazards.map((z) => [r1(z.x), r1(z.y), z.r, r1(z.t), z.snow ? 1 : 0]),
     it: s.items.map((it) => [it.id, it.kind, r1(it.x), r1(it.y), r1(it.z), r1(it.t)]),
     fx: s.fx,
     msg: s.msgT > 0 ? s.msg : '',
@@ -1590,3 +1793,4 @@ export function debugSpawn(s, kind, x, y, hpMul = 1) {
 }
 export function debugAug(s, id, augId) { const h = s.heroes[id]; if (h) { h.augs.push(augId); recompute(s, h); } }
 export function debugXp(s, n) { giveXp(s, n); }
+export function debugHit(s, id, dmg) { const e = s.enemies.find((u) => u.id === id); if (e) { e.inv = 0; hit(s, e, { dmg, kb: [0, 0], ux: 1, uy: 0, by: Object.values(s.heroes)[0] }); } }

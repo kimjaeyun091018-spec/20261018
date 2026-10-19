@@ -1,7 +1,7 @@
 // ============================================================
 //  원소 아레나 — 시작점: 메뉴 ↔ 게임, 입력, 방장/참가자 네트워크
 // ============================================================
-import { CHARS, VIEW_W, VIEW_H, MAX_PLAYERS, COLOSSEUM } from './data.js';
+import { CHARS, VIEW_W, VIEW_H, MAX_PLAYERS, COLOSSEUM, CHAPTERS } from './data.js';
 import * as SIM from './sim.js';
 import { createRenderer } from './render.js';
 import { initAudio, fxSound, setMuted as audioMute, sfx } from './audio.js';
@@ -33,6 +33,8 @@ const handlers = {
   resume() { if (game) { game.paused = false; UI.hide(); } },
   mute() { const m = !SV.S().muted; SV.setMuted(m); audioMute(m); UI.pause(handlers, { code: game?.room?.code || game?.code, muted: m }); },
   quit: () => quitGame(),
+  setMute(m) { SV.setMuted(m); audioMute(m); },
+  onLayout() { applyLayout(); },
   next() { const cfg = { ...game_last, ch: game.cfg.ch + 1 }; quitGame(true); startGame(cfg); },
   retry() { quitGame(true); startGame(game_last); },
 };
@@ -146,7 +148,7 @@ function buildSkillButtons(char) {
   const C = CHARS[char];
   const names = [['atk', C.skills[0].name, '클릭'], ['s1', C.skills[1].name, 'Q'], ['s2', C.skills[2].name, 'E'], ['s3', C.skills[3].name, 'R'], ['dash', '대시', 'Space']];
   $skills.className = `skills ${isTouch ? 'touch' : 'pc'}`;
-  $skills.innerHTML = names.map(([a, n, k], i) => `<div class="sk ${a}" data-a="${a}" style="--c:${C.color}"><span class="key">${isTouch ? '' : k}</span><b>${n}</b><span class="cd"></span><span class="cdt"></span></div>`).join('');
+  $skills.innerHTML = names.map(([a, n, k], i) => `<div class="sk ${a}" data-a="${a}" data-c="${C.color}" style="--c:${C.color}"><span class="key">${isTouch ? '' : k}</span><b>${n}</b><span class="cd"></span><span class="cdt"></span></div>`).join('');
   $skills.querySelectorAll('.sk').forEach((b) => {
     const a = b.dataset.a;
     const on = (e) => { e.preventDefault(); initAudio(); touch.btn.add(a); tapped.add(a); b.classList.add('down'); };
@@ -155,7 +157,27 @@ function buildSkillButtons(char) {
     b.addEventListener('mousedown', (e) => { if (!isTouch) { tapped.add(a); e.preventDefault(); } });
   });
   $stick.hidden = !isTouch;
+  applyLayout();
 }
+// 설정에서 정한 조이스틱·버튼 위치 (없으면 기본 CSS 배치)
+function applyLayout() {
+  const L = SV.loadLayout();
+  const wrap = document.getElementById('wrap').getBoundingClientRect();
+  const btns = [...$skills.querySelectorAll('.sk')];
+  $skills.classList.toggle('custom', !!L && isTouch);
+  document.getElementById('controls').style.opacity = L?.alpha ?? 1;
+  if (!L || !isTouch) {
+    $stick.removeAttribute('style'); $knob.removeAttribute('style');
+    btns.forEach((b) => b.removeAttribute('style'));
+    btns.forEach((b) => b.style.setProperty('--c', b.dataset.c || ''));
+    return;
+  }
+  const place = (el, P, size) => { const d = size * (P.s || 1); Object.assign(el.style, { left: `${P.x * wrap.width - d / 2}px`, top: `${P.y * wrap.height - d / 2}px`, width: `${d}px`, height: `${d}px`, right: 'auto', bottom: 'auto' }); return d; };
+  const d = place($stick, L.stick, SV.CONTROL_BASE.stick);
+  Object.assign($knob.style, { width: `${d * 0.36}px`, height: `${d * 0.36}px`, left: `${d * 0.32}px`, top: `${d * 0.32}px` });
+  btns.forEach((b) => place(b, L[b.dataset.a] || SV.DEFAULT_LAYOUT[b.dataset.a], SV.CONTROL_BASE[b.dataset.a]));
+}
+addEventListener('resize', () => applyLayout());
 function updateSkillButtons(h) {
   if (!h) return;
   $skills.querySelectorAll('.sk').forEach((b) => {
@@ -219,7 +241,7 @@ function findTarget(me, snap) {
 
 // ---------- 게임 시작 ----------
 function heroOpts(cfg, slot) {
-  const o = { tree: SV.S().tree, slot };
+  const o = { tree: SV.S().tree, slot, lv: SV.heroLv(SV.S().char) };
   if (cfg.mode === 'colosseum') o.team = cfg.fmt === '2v2' ? (slot < 2 ? 1 : 2) : slot + 1;
   return o;
 }
@@ -244,14 +266,14 @@ async function startGame(cfg) {
         onJoin(id, hello) {
           if (!game || Object.keys(game.state.heroes).length >= MAX_PLAYERS) return false;
           const slot = [0, 1, 2, 3].find((s) => !Object.values(game.state.heroes).some((h) => h.slot === s));
-          const h = SIM.addHero(game.state, id, hello.name || '친구', hello.char, { ...heroOpts(game.cfg, slot), tree: Array.isArray(hello.tree) ? hello.tree : [] });
+          const h = SIM.addHero(game.state, id, hello.name || '친구', hello.char, { ...heroOpts(game.cfg, slot), tree: Array.isArray(hello.tree) ? hello.tree : [], lv: hello.lv | 0 });
           if (!h) return false;
           UI.toast(`${h.name} 님이 들어왔어요!`);
           return true;
         },
         onMsg(id, m) {
           if (m.t === 'in') game.inputs[id] = m.i;
-          if (m.t === 'char' && CHARS[m.c]) SIM.setHeroChar(game.state, id, m.c, m.tree);
+          if (m.t === 'char' && CHARS[m.c]) SIM.setHeroChar(game.state, id, m.c, m.tree, m.lv);
         },
         onLeave(id) { const h = game?.state.heroes[id]; if (h) UI.toast(`${h.name} 님이 나갔어요`); SIM.removeHero(game.state, id); delete game.inputs[id]; },
       });
@@ -271,7 +293,7 @@ async function joinGame(code, status) {
   const me = SV.S();
   const g = { role: 'client', myId: null, cfg: {}, snap: null, prev: null, recvT: 0, interval: 50, paused: false, ended: false, sendT: 0, goldSeen: 0, runId: null };
   try {
-    g.conn = await NET.joinRoom(code, { name: me.name || '친구', char: me.char, tree: me.tree }, {
+    g.conn = await NET.joinRoom(code, { name: me.name || '친구', char: me.char, tree: me.tree, lv: SV.heroLv(me.char) }, {
       onWelcome(id) { g.myId = id; },
       onMsg(m) {
         if (m.t !== 's') return;
@@ -337,11 +359,11 @@ function checkEnd() {
   if (s.mode === 'story' && (s.story.phase === 'done' || s.story.phase === 'fail') && s.story.t < 97.5) {
     g.ended = true;
     const win = s.story.phase === 'done';
-    // 도달한 곳 (1-1 = 1 … 3-5 = 15, 끝까지 깨면 16)
+    // 도달한 곳 (1-1 = 1 … 4-5 = 20, 끝까지 깨면 21)
     const reached = s.story.ch * 5 + s.story.st + 1 + (win ? 1 : 0);
     const prevBest = SV.S().stats.best || 0;
     SV.stat('best', reached, true);
-    if (win) { SV.stat('wins', 1); SV.clearChapter(2); }
+    if (win) { SV.stat('wins', 1); SV.clearChapter(CHAPTERS.length - 1); }
     else SV.clearChapter(Math.max(-1, s.story.ch - 1));
     const gold = s.gold;
     settle(g);

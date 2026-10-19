@@ -341,3 +341,48 @@ button.boxbtn:hover { filter: brightness(1.15); }
 .sumlist .sg { display: flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 12px; background: rgba(255, 213, 79, .1); border: 2px solid rgba(255, 213, 79, .5); font-size: 20px; }
 .sumlist .sg b { color: var(--gold); }
 @media (max-width: 560px) { .boxshop .boxes { grid-template-columns: 1fr; } .odds { grid-template-columns: repeat(2, 1fr); } }
+
+/* 영웅 레벨 */
+.char .lvtag { position: absolute; top: 24px; left: 6px; font-size: 10px; font-weight: 900; color: #ffe082; background: rgba(0, 0, 0, .55); padding: 0 4px; border-radius: 4px; }
+.lvbox { margin: 10px 0; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); }
+.lvhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lvnum { font-family: 'Black Han Sans', sans-serif; font-weight: 400; font-size: 26px; color: #ffe082; }
+.lvmax { color: var(--sub); }
+.maxed { color: var(--sub); font-size: 12px; margin-left: auto; }
+.ppbar { position: relative; flex: 1; min-width: 160px; height: 20px; border-radius: 10px; background: rgba(255, 255, 255, .08); overflow: hidden; margin-left: 8px; }
+.ppbar i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #7c4dff, #00e5ff); }
+.ppbar span { position: relative; display: block; text-align: center; font-size: 12px; font-weight: 900; line-height: 20px; text-shadow: 0 1px 2px #000; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+.stats div { display: flex; flex-direction: column; padding: 6px 8px; border-radius: 8px; background: rgba(0, 0, 0, .25); }
+.stats span { font-size: 11px; color: var(--sub); }
+.stats b { font-size: 16px; }
+.stats em { font-style: normal; font-size: 11px; color: #69f0ae; }
+button.big.lvup { width: 100%; text-align: center; background: linear-gradient(135deg, #00897b, #00695c); border-color: #4db6ac; font-weight: 900; }
+button.big.lvup small { display: block; font-size: 11px; font-weight: 400; }
+button.big.lvup:disabled { opacity: .5; }
+.dcard.ppc b { font-family: 'Black Han Sans', sans-serif; font-weight: 400; font-size: 30px; color: #80d8ff; }
+.dcard.ppc { border-color: #4fc3f7; }
+.sumlist .sp { display: flex; flex-direction: column; align-items: center; padding: 4px 8px; border-radius: 10px; border: 2px solid #4fc3f7; background: rgba(79, 195, 247, .08); }
+.sumlist .sp b { color: #80d8ff; font-size: 13px; } .sumlist .sp small { font-size: 10px; color: var(--sub); }
+@media (max-width: 560px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+.skills.touch.custom { left: 0; top: 0; right: auto; bottom: auto; width: 100%; height: 100%; pointer-events: none; }
+.skills.touch.custom .sk { pointer-events: auto; }
+
+/* 설정 · 조작 배치 편집 */
+.setrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--line); }
+.setrow b { display: block; } .setrow small { color: var(--sub); font-size: 12px; }
+.toggle { min-width: 72px; font-weight: 900; }
+.toggle.on { background: #2e7d32; border-color: #66bb6a; }
+.lay { position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 40%, #233042, #0b0d16 80%); overflow: hidden; touch-action: none; }
+.lay .grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255, 255, 255, .04) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .04) 1px, transparent 1px); background-size: 32px 32px; }
+.lay .ctl { position: absolute; border-radius: 50%; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 12px; font-weight: 900; color: #fff; background: rgba(14, 11, 28, .82); border: 3px solid #b388ff; touch-action: none; cursor: grab; user-select: none; }
+.lay .ctl.stick { background: rgba(255, 255, 255, .07); border-color: rgba(255, 255, 255, .35); }
+.lay .ctl.stick::after { content: ''; position: absolute; width: 36%; height: 36%; border-radius: 50%; background: rgba(255, 255, 255, .35); }
+.lay .ctl.dash { border-color: #80deea; }
+.lay .ctl.sel { box-shadow: 0 0 0 3px #ffd54f, 0 0 20px rgba(255, 213, 79, .6); }
+.lay .ctl span { position: relative; z-index: 1; pointer-events: none; }
+.lay .bar { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; padding: 8px 12px; border-radius: 14px; background: rgba(10, 8, 22, .88); border: 1px solid var(--line); max-width: calc(100vw - 20px); z-index: 5; }
+.lay .bar label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--sub); }
+.lay .bar input[type=range] { width: 110px; padding: 0; }
+.lay .hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: rgba(255, 255, 255, .35); font-size: 14px; text-align: center; pointer-events: none; }
+.setrow button { white-space: nowrap; flex: none; }

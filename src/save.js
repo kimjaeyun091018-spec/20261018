@@ -1,12 +1,12 @@
 // 저장: 기기(localStorage)에 계정별로 따로, 구글 계정이면 클라우드에도 (cloud.js)
-import { TREE, CHARS, CHAR_KEYS, RARITY, RARITY_ORDER, BOXES, GACHA } from './data.js';
+import { TREE, CHARS, CHAR_KEYS, RARITY, RARITY_ORDER, BOXES, GACHA, HERO_LV } from './data.js';
 
 const BASE = 'elementArena.v1';
 let account = null; // null = 게스트, 'g-<uid>' = 구글 계정
 const keyOf = (acc) => (acc ? `${BASE}:${acc}` : BASE);
 let KEY = keyOf(null);
 let onWrite = null;
-const DEF = { name: '', char: 'knight', owned: ['knight'], gold: 0, tree: [], cleared: 0, pity: 0, boxes: 0, stats: { runs: 0, bestCombo: 0, kos: 0, bestLevel: 0, best: 0, wins: 0 }, muted: false };
+const DEF = { name: '', char: 'knight', owned: ['knight'], gold: 0, tree: [], cleared: 0, pity: 0, boxes: 0, lv: {}, pp: {}, stats: { runs: 0, bestCombo: 0, kos: 0, bestLevel: 0, best: 0, wins: 0 }, muted: false };
 let data = load();
 
 function load(raw) {
@@ -17,6 +17,7 @@ function load(raw) {
       o.owned = Array.isArray(d.owned) ? d.owned.filter((k) => CHARS[k]) : ['knight'];
       if (!o.owned.includes('knight')) o.owned.unshift('knight');
       if (!o.owned.includes(o.char)) o.char = 'knight';
+      o.lv = { ...(d.lv || {}) }; o.pp = { ...(d.pp || {}) };
       return o;
     }
   } catch { /* 무시 */ }
@@ -84,6 +85,15 @@ export function openBox(box) {
     const c = rollHero(box, data.pity + 1 >= GACHA.pity);
     if (c) { data.owned.push(c); data.pity = 0; drops.push({ t: 'hero', c }); continue; }
     data.pity++;
+    // 영웅이 아니면: P.P (가진 영웅 중 아직 만렙이 아닌 한 명) 또는 골드
+    const ppList = data.owned.filter((k) => heroLv(k) < HERO_LV.max);
+    if (ppList.length && Math.random() < GACHA.ppChance) {
+      const k = ppList[Math.floor(Math.random() * ppList.length)];
+      const n = Math.round(GACHA.pp[0] + Math.random() * (GACHA.pp[1] - GACHA.pp[0]));
+      data.pp[k] = (data.pp[k] || 0) + n;
+      drops.push({ t: 'pp', c: k, n });
+      continue;
+    }
     const jackpot = Math.random() < GACHA.jackpot;
     const [a, b] = jackpot ? GACHA.jackpotGold : B.gold;
     const n = Math.round(a + Math.random() * (b - a));
@@ -91,10 +101,21 @@ export function openBox(box) {
     drops.push({ t: 'gold', n, jackpot });
   }
   data.boxes = (data.boxes || 0) + 1;
-  // 영웅이 앞에 오면 김이 새므로 골드 → 영웅 순 (영웅끼리는 낮은 등급 먼저)
-  drops.sort((x, y) => (x.t === 'hero') - (y.t === 'hero') || (x.t === 'hero' ? RARITY_ORDER.indexOf(CHARS[x.c].rarity) - RARITY_ORDER.indexOf(CHARS[y.c].rarity) : 0));
+  // 영웅이 앞에 오면 김이 새므로 골드·P.P → 영웅 순 (영웅끼리는 낮은 등급 먼저)
+  drops.sort((x, y) => (x.t === 'hero') - (y.t === 'hero') || (x.t === 'pp') - (y.t === 'pp') || (x.t === 'hero' ? RARITY_ORDER.indexOf(CHARS[x.c].rarity) - RARITY_ORDER.indexOf(CHARS[y.c].rarity) : 0));
   save();
   return drops;
+}
+// ---------- 영웅 레벨 ----------
+export const heroLv = (c) => Math.max(1, Math.min(HERO_LV.max, data.lv?.[c] || 1));
+export const heroPP = (c) => data.pp?.[c] || 0;
+export function canLevel(c) { const lv = heroLv(c); return owns(c) && lv < HERO_LV.max && heroPP(c) >= HERO_LV.pp[lv] && data.gold >= HERO_LV.gold[lv]; }
+export function levelUp(c) {
+  if (!canLevel(c)) return false;
+  const lv = heroLv(c);
+  data.pp[c] -= HERO_LV.pp[lv]; data.gold -= HERO_LV.gold[lv];
+  data.lv[c] = lv + 1; save();
+  return true;
 }
 export function addGold(n) { data.gold = Math.max(0, data.gold + Math.round(n)); save(); }
 export function canBuy(id) {
@@ -116,3 +137,14 @@ export function resetTree() {
 export function clearChapter(ch) { data.cleared = Math.max(data.cleared, ch + 1); save(); }
 export function stat(k, v, max = false) { data.stats[k] = max ? Math.max(data.stats[k] || 0, v) : (data.stats[k] || 0) + v; save(); }
 export function setMuted(m) { data.muted = m; save(); }
+
+// ---------- 조작 배치 (기기마다 따로, 클라우드 X) ----------
+// { stick|atk|s1|s2|s3|dash: { x, y, s } (x·y = 화면 가로·세로 비율의 중심, s = 크기 배율), alpha }
+const LAYOUT_KEY = 'elementArena.layout';
+export const CONTROL_BASE = { stick: 140, atk: 92, s1: 62, s2: 62, s3: 62, dash: 54 };
+export const DEFAULT_LAYOUT = {
+  stick: { x: 0.12, y: 0.78, s: 1 }, atk: { x: 0.92, y: 0.84, s: 1 }, s1: { x: 0.81, y: 0.88, s: 1 },
+  s2: { x: 0.83, y: 0.69, s: 1 }, s3: { x: 0.935, y: 0.6, s: 1 }, dash: { x: 0.72, y: 0.74, s: 1 }, alpha: 1,
+};
+export function loadLayout() { try { const d = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); return d && d.stick ? d : null; } catch { return null; } }
+export function saveLayout(l) { try { if (l) localStorage.setItem(LAYOUT_KEY, JSON.stringify(l)); else localStorage.removeItem(LAYOUT_KEY); } catch { /* 무시 */ } }

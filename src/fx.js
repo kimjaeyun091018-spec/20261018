@@ -173,6 +173,13 @@ export function drawShot(ctx, sh, now, P, dt) {
       if (Math.random() < 0.15) P?.add({ kind: 'smoke', x, y: yy, vx: rnd(-20, 20), vy: -40, color: '#4e342e', life: 0.5, size: 4, grow: 14, alpha: 0.6 });
       break;
     }
+    case 'snowball': {
+      ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x, y + 10, 6, 2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#f5fbff'; ctx.beginPath(); ctx.arc(x, yy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#c9e4f5'; ctx.beginPath(); ctx.arc(x + r * 0.3, yy + r * 0.3, r * 0.55, 0, Math.PI * 2); ctx.fill();
+      trail(0.4, { kind: 'glow', color: '#e1f5fe', vx: 0, vy: 0, life: 0.25, size: 2, drag: 0 });
+      break;
+    }
     case 'arrow': case 'ebolt': {
       const en = look === 'ebolt';
       ctx.translate(x, yy); ctx.rotate(a);
