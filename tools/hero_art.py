@@ -240,7 +240,7 @@ HEROES['mage'] = dict(
         '...............x...',
     ], pivot=(4, 3)),
     kind='staff', legs=('p', 'o', 'O'), arm='a', glove='c', behind=False,
-    sprite=dict(file='tools/art/mage.png', cell=80, scale=1.0, weapon_from=(50, 15), pivot=(50, 46), legs=(65, 34), face=(18, 8, 32),
+    sprite=dict(file='tools/art/mage.png', cell=104, scale=0.78, weapon_from=(71, 0), weapon_extra=((63, 31, 71, 60),), pivot=(64, 55), legs=(78, 47), face=(37, 21, 32),
                 ang=dict(rest=0, windup=-12, strike=8, follow=4, hurt=10, win=-15), push=dict(windup=-1, strike=2, follow=1)),
 )
 
