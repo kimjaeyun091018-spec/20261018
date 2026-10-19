@@ -773,15 +773,18 @@ function updateZones(s, dt) {
 //  영웅 한 틱
 // ============================================================
 // 빛의 문: 영웅들이 빛에 감싸여 문 안으로 빨려 들어감 (점점 빨라지며 작아짐)
+// 문에 닿은 영웅: 그 자리에 멈춰 빛이 감싸다가(0~35%) 문 안으로 빨려 들어감. 나머지는 그 자리에 멈춤
 function pullIntoPortal(s, h, dt) {
   const P = s.story.portal, k = Math.min(1, s.story.warpT / WARP_T);
-  const tx = P.x, ty = P.y - 46;
-  const dx = tx - h.x, dy = ty - h.y, d = Math.hypot(dx, dy);
-  const sp = (120 + 900 * k * k) * dt;
-  if (d > 1) { const m = Math.min(d, sp); h.x += (dx / d) * m; h.y += (dy / d) * m; }
-  h.kvx = h.kvy = 0; h.dash = h.roll = h.chan = h.snipe = null; h.inv = 1;
+  h.kvx = h.kvy = 0; h.dash = h.roll = h.chan = h.snipe = null; h.inv = 1; h.moving = false;
+  if (h.id !== s.story.warpWho) { h.warp = 0; return; }
   h.warp = k;
-  h.moving = false;
+  if (k < 0.35) return; // 정지
+  const tx = P.x, ty = P.y - 50;
+  const q = (k - 0.35) / 0.65;
+  const dx = tx - h.x, dy = ty - h.y, d = Math.hypot(dx, dy);
+  const m = Math.min(d, (60 + 700 * q * q) * dt);
+  if (d > 1) { h.x += (dx / d) * m; h.y += (dy / d) * m; }
 }
 function updateHero(s, h, inp, dt) {
   h.cds = h.cds.map((c) => Math.max(0, c - dt));
@@ -1718,7 +1721,7 @@ function updateStory(s, dt) {
     }
     if (P.open) {
       const h = heroes.find((u) => isUnit(u) && Math.abs(u.x - P.x) < 26 && u.y > P.y - 26 && u.y < P.y + 12);
-      if (h) { S.phase = 'warp'; S.t = WARP_T; S.warpT = 0; fxPush(s, { k: 'warp', x: P.x, y: P.y, who: h.id, t: WARP_T }); }
+      if (h) { S.phase = 'warp'; S.t = WARP_T; S.warpT = 0; S.warpWho = h.id; fxPush(s, { k: 'warp', x: P.x, y: P.y, who: h.id, t: WARP_T }); }
     }
     return;
   }
@@ -1850,7 +1853,7 @@ export function snapshot(s) {
     fx: s.fx,
     msg: s.msgT > 0 ? s.msg : '',
     sto: s.story ? { ch: s.story.ch, st: s.story.st, ph: s.story.phase, w: s.story.wave, tw: s.story.totalWaves, boss: s.story.boss, chest: s.story.chest, cl: s.story.cleared ? 1 : 0,
-      pt: s.story.portal ? [s.story.portal.x, s.story.portal.y, r1(s.story.portal.rise), s.story.portal.open ? 1 : 0, s.story.portal.last ? 1 : 0] : null } : null,
+      pt: s.story.portal ? [s.story.portal.x, s.story.portal.y, r1(s.story.portal.rise), s.story.portal.open ? 1 : 0, s.story.portal.last ? 1 : 0, s.story.phase === 'warp' ? Math.round((s.story.warpT / WARP_T) * 100) / 100 : 0] : null } : null,
     col: s.colo ? { over: s.colo.over, win: s.colo.winner, wt: s.colo.winTeam, name: s.colo.name } : null,
   };
 }

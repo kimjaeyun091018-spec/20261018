@@ -233,9 +233,9 @@ export function createRenderer(canvas) {
         case 'shieldhit': P.burst(f.x, f.y - 12, 6, { kind: 'spark', color: ['#80d8ff', '#ffffff'], sp: [80, 200], life: [0.15, 0.3], size: [2, 3] }); break;
         case 'shieldbreak': P.burst(f.x, f.y - 12, 22, { kind: 'spark', color: ['#80d8ff', '#e1f5fe', '#ffffff'], sp: [120, 340], life: [0.25, 0.5], size: [2, 4] }); ui.say(f.x, f.y - 40, '방어막 파괴!', '#80d8ff', 15); break;
         case 'portalrise': portalFx.rise = performance.now(); P.burst(f.x, f.y, 30, { kind: 'smoke', color: ['#bcaaa4', '#8d6e63'], sp: [60, 220], life: [0.6, 1.2], size: [5, 10], grow: 14 }); P.burst(f.x, f.y, 26, { kind: 'rock', color: ['#795548', '#5d4037'], sp: [120, 300], life: [0.6, 1], size: [3, 6], grav: 700, a: -Math.PI / 2, spread: 1.2 }); break;
-        case 'portalopen': flash = 0.35; flashCol = '#fff8e1'; banners.push({ text: '빛의 문', sub: '문이 열렸다! 안으로 들어가세요', color: '#ffe082', t: 1.3, max: 1.3 }); P.burst(f.x, f.y - 60, 60, { kind: 'glow', color: ['#fffde7', '#ffe082', '#80d8ff'], sp: [80, 380], life: [0.6, 1.3], size: [2, 5] }); break;
-        case 'warp': flash = 0.15; flashCol = '#fff8e1'; P.burst(f.x, f.y - 50, 40, { kind: 'glow', color: ['#ffffff', '#ffe082', '#b3e5fc'], sp: [80, 300], life: [0.4, 0.8], size: [2, 4] }); break;
-        case 'warpend': flash = 0.7; flashCol = '#ffffff'; P.burst(f.x, f.y - 50, 90, { kind: 'glow', color: ['#ffffff', '#ffe082', '#b3e5fc'], sp: [120, 560], life: [0.5, 1], size: [2, 5] }); break;
+        case 'portalopen': banners.push({ text: '빛의 문', sub: '문이 열렸다! 안으로 들어가세요', color: '#ffe082', t: 1.3, max: 1.3 }); P.burst(f.x, f.y - 60, 60, { kind: 'glow', color: ['#fffde7', '#ffe082', '#80d8ff'], sp: [80, 380], life: [0.6, 1.3], size: [2, 5] }); break;
+        case 'warp': break; // 화면 전체 번쩍임 없음 — 문 주변만 밝아짐 (drawPortal)
+        case 'warpend': break;
         default:
       }
       hooks.onFx?.(f, myId);
@@ -537,12 +537,12 @@ export function createRenderer(canvas) {
   // 빛의 문으로 빨려 들어가는 영웅: 빛에 감싸여 작아지며 하얗게
   function drawWarping(h, x, y, sc, now) {
     const k = clamp(h.wp, 0, 1);
-    const s2 = sc * (1 - 0.8 * k);
+    const s2 = sc * (k < 0.35 ? 1 : 1 - 0.85 * ((k - 0.35) / 0.65)); // 멈춰 있다가 빨려 들어가며 작아짐
     const cy = y - 14 * s2;
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     const R = 26 + 30 * k;
     const gr = ctx.createRadialGradient(x, cy, 0, x, cy, R);
-    gr.addColorStop(0, `rgba(255,255,255,${0.55 + 0.4 * k})`); gr.addColorStop(0.45, `rgba(255,236,179,${0.35 + 0.3 * k})`); gr.addColorStop(1, 'rgba(128,216,255,0)');
+    gr.addColorStop(0, `rgba(255,250,235,${0.3 + 0.3 * k})`); gr.addColorStop(0.45, `rgba(255,236,179,${0.2 + 0.2 * k})`); gr.addColorStop(1, 'rgba(255,236,179,0)');
     ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, cy, R, 0, TAU); ctx.fill();
     // 몸을 감는 빛의 띠
     for (let i = 0; i < 3; i++) {
@@ -554,7 +554,7 @@ export function createRenderer(canvas) {
     const frame = heroFrame(h, now);
     drawHeroSprite(h, frame, x, y, 1 - 0.6 * k, false, 0, s2);
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    drawHeroSprite(h, frame, x, y, Math.min(1, 0.3 + k), true, 0, s2);
+    drawHeroSprite(h, frame, x, y, Math.min(0.6, 0.15 + k * 0.6), true, 0, s2);
     ctx.restore();
     // 주위의 빛 알갱이가 소용돌이치며 빨려 들어감
     for (let i = 0; i < 3; i++) {
@@ -566,7 +566,7 @@ export function createRenderer(canvas) {
   // ---------- 빛의 문: 바닥에서 솟아오르는 거대한 석문 ----------
   const portalFx = { rise: 0 };
   function drawPortal(pt, now, dt) {
-    const [x, y, rise, open, last] = pt;
+    const [x, y, rise, open, last, warp = 0] = pt;
     const W = 132, H = 176, k = clamp(rise, 0, 1);
     const ease = 1 - (1 - k) ** 3;
     const shown = H * ease;                  // 땅 위로 올라온 높이
@@ -630,11 +630,13 @@ export function createRenderer(canvas) {
     // 솟아오르는 중: 흙먼지
     if (k < 1 && Math.random() < 0.6) P.add({ kind: 'smoke', x: x + rnd(-W / 2, W / 2), y: y + rnd(-4, 4), vx: rnd(-40, 40), vy: rnd(-40, -10), life: 0.7, size: rnd(5, 9), grow: 14, color: '#a1887f' });
     if (open) {
-      // 빛기둥
+      // 빛기둥 (들어가는 중엔 문 주변만 점점 밝아짐)
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      const gr = ctx.createRadialGradient(x, y - 60, 10, x, y - 60, 150);
-      gr.addColorStop(0, `rgba(255,236,179,${0.35 + 0.1 * Math.sin(now / 160)})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y - 60, 150, 0, TAU); ctx.fill();
+      const GR = 150 + 70 * warp;
+      const gr = ctx.createRadialGradient(x, y - 60, 10, x, y - 60, GR);
+      gr.addColorStop(0, `rgba(255,236,179,${0.35 + 0.1 * Math.sin(now / 160) + 0.3 * warp})`); gr.addColorStop(0.6, `rgba(255,236,179,${0.12 * warp})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y - 60, GR, 0, TAU); ctx.fill();
+      if (warp > 0 && Math.random() < 0.8) { const a = Math.random() * TAU, r = rnd(60, 120); P.add({ kind: 'glow', x: x + Math.cos(a) * r, y: y - 60 + Math.sin(a) * r * 0.8, vx: -Math.cos(a) * r * 2.2, vy: -Math.sin(a) * r * 1.8, life: 0.4, size: rnd(1.5, 3), color: Math.random() < 0.5 ? '#fff8e1' : '#ffe082', drag: 0 }); }
       const lg = ctx.createLinearGradient(0, y - 420, 0, y);
       lg.addColorStop(0, 'rgba(255,248,225,0)'); lg.addColorStop(1, 'rgba(255,248,225,.28)');
       ctx.fillStyle = lg; ctx.fillRect(x - 30, y - 420, 60, 420);
