@@ -1,5 +1,5 @@
 // 메뉴 화면들 (DOM)
-import { CHARS, CHAR_KEYS, ELEMENTS, TREE, CHAPTERS, REACTIONS, HERO_SPRITE, HERO_SHEETS, AUGMENTS, ITEMS } from './data.js';
+import { CHARS, CHAR_KEYS, ELEMENTS, TREE, CHAPTERS, REACTIONS, HERO_SPRITE, HERO_SHEETS, AUGMENTS, ITEMS, RARITY, RARITY_ORDER, BOXES, GACHA } from './data.js';
 import { COLOSSEUM_ARENAS } from './maps.js';
 import * as SV from './save.js';
 import { sfx } from './audio.js';
@@ -122,6 +122,7 @@ export function lobby(h) {
         <section class="modes">
           <button class="big story" data-go="story"><b>스토리 모드</b><small>스테이지 돌파 · 증강 · 최대 4명 협동</small></button>
           <button class="big colo" data-go="colo"><b>콜로세움</b><small>친구·봇과 대난투식 대전 · 날려서 링아웃</small></button>
+          <button class="big boxbtn" data-go="boxes"><span class="mchest"><i></i></span><span><b>뽑기 상자</b><small>${SV.allOwned() ? '모든 영웅을 모았어요!' : `새 영웅을 뽑아 보세요 · 영웅 ${s.owned.length}/${CHAR_KEYS.length}`}</small></span></button>
           <div class="rowbtns">
             <button data-go="tree">🌳 스킬 트리</button>
             <button data-go="join">🔗 코드로 참가</button>
@@ -240,12 +241,14 @@ export function chars(h) {
         <div class="head"><button class="back">← 뒤로</button><h2>영웅</h2><span class="gold">💰 ${s.gold} G</span></div>
         <div class="chargrid">${CHAR_KEYS.map((k) => {
           const C = CHARS[k], E = ELEMENTS[C.el], own = SV.owns(k);
-          return `<button class="char ${k === sel ? 'on' : ''} ${own ? '' : 'locked'} ${k === s.char ? 'cur' : ''}" data-c="${k}" style="--c:${C.color}">
+          const R = RARITY[C.rarity] || RARITY.start;
+          return `<button class="char ${k === sel ? 'on' : ''} ${own ? '' : 'locked'} ${k === s.char ? 'cur' : ''}" data-c="${k}" style="--c:${C.color};--r:${R.color}">
+            <span class="rtag">${R.name}</span>
             <span class="pslot"></span>
             <span class="cname">${C.name}</span>
             <span class="ctitle">${C.title}</span>
             <span class="badge" style="background:${E.color}">${E.name}</span>
-            ${own ? (k === s.char ? '<span class="tagcur">사용 중</span>' : '') : `<span class="price">🔒 ${C.price} G</span>`}
+            ${own ? (k === s.char ? '<span class="tagcur">사용 중</span>' : '') : '<span class="price">🔒 상자에서 뽑기</span>'}
           </button>`;
         }).join('')}</div>
         <div class="detail hero" id="detail"></div>
@@ -258,7 +261,7 @@ export function chars(h) {
         <div class="bustslot"></div>
         <div class="hero-info">
           <div class="hero-name"><b>${C.name}</b> <span class="ctitle">${C.title}</span></div>
-          <div class="hero-tags"><span class="badge" style="background:${E.color}">${E.name}</span> <span class="role">${C.role}</span> <small>무게 ${C.weight} · 속도 ${C.speed}</small></div>
+          <div class="hero-tags"><span class="badge" style="background:${E.color}">${E.name}</span> <span class="badge rar" style="background:${(RARITY[C.rarity] || RARITY.start).color}">${(RARITY[C.rarity] || RARITY.start).name}</span> <span class="role">${C.role}</span> <small>무게 ${C.weight} · 속도 ${C.speed}</small></div>
           <p class="quote">“${C.quote}”</p>
           <p class="lore">${C.lore}</p>
         </div>
@@ -268,14 +271,131 @@ export function chars(h) {
       <p class="sub">${C.desc}</p>
       <div class="rowbtns">${own
         ? (sel === s.char ? '<button class="big pick" disabled>사용 중</button>' : '<button class="big pick">이 영웅으로 출전</button>')
-        : `<button class="big buy" ${s.gold < C.price ? 'disabled' : ''}>${C.price} G로 영입${s.gold < C.price ? ` (골드 ${C.price - s.gold} 부족)` : ''}</button>`}</div>`;
+        : `<button class="big gobox">🎁 뽑기 상자에서 얻기</button><button class="big buy" ${s.gold < C.price ? 'disabled' : ''}>💰 ${C.price.toLocaleString()} G로 바로 영입${s.gold < C.price ? `<small>골드 ${(C.price - s.gold).toLocaleString()} 부족</small>` : ''}</button>`}</div>`;
     det.querySelector('.bustslot').appendChild(portrait(sel, 128, true));
     bind('.char', (el) => draw(el.dataset.c));
     bind('.pick', () => { SV.setChar(sel); h.onChar?.(sel); draw(sel); });
-    bind('.buy', () => { if (SV.buyChar(sel)) { sfx('buy'); toast(`${C.name} 영입 완료!`); h.onChar?.(sel); } draw(sel); });
+    bind('.buy', () => { if (!confirm(`${C.name}을(를) ${C.price.toLocaleString()} G로 바로 영입할까요?\n(뽑기 상자로 얻는 편이 훨씬 싸요)`)) return; if (SV.buyChar(sel)) { sfx('buy'); toast(`${C.name} 영입 완료!`); h.onChar?.(sel); } draw(sel); });
+    bind('.gobox', () => h.go('boxes'));
     bind('.back', () => h.back());
   };
   draw();
+}
+
+// ---------- 뽑기 상자 ----------
+const pctTxt = (p) => (p >= 0.1 ? (p * 100).toFixed(0) : p >= 0.01 ? (p * 100).toFixed(1) : (p * 100).toFixed(2)) + '%';
+function chestHtml(color, cls = '') { return `<div class="chest ${cls}" style="--bc:${color}"><div class="clid"><i></i></div><div class="cbody"><i class="lock"></i></div></div>`; }
+export function boxes(h) {
+  const s = SV.S();
+  const all = SV.allOwned();
+  const odds = SV.gachaOdds('small');
+  const left = GACHA.pity - s.pity;
+  show(`
+    <div class="panel wide boxshop">
+      <div class="head"><button class="back">← 뒤로</button><h2>뽑기 상자</h2><span class="gold">💰 ${s.gold.toLocaleString()} G</span></div>
+      <p class="sub center">상자 한 칸마다 <b>아직 없는 영웅</b>이 나올 수 있어요. 안 나오면 골드! 영웅이 안 나올수록 <b>행운</b>이 쌓여 확률이 올라가요.</p>
+      <div class="boxes">${Object.entries(BOXES).map(([k, B]) => `
+        <div class="boxcard" style="--bc:${B.color}">
+          ${chestHtml(B.color, 'small ' + k)}
+          <b>${B.name}</b>
+          <small>${B.drops}칸${B.luck > 1 ? ` · 행운 +${Math.round((B.luck - 1) * 100)}%` : ''}</small>
+          <button class="big open" data-box="${k}" ${all || s.gold < B.price ? 'disabled' : ''}>💰 ${B.price.toLocaleString()} G</button>
+        </div>`).join('')}</div>
+      ${all ? '<p class="sub center"><b>🎉 모든 영웅을 모았어요!</b></p>' : `
+      <div class="luck"><span>🍀 행운</span><div class="lbar"><i style="width:${Math.min(100, (s.pity / GACHA.pity) * 100)}%"></i></div><span><b>${left}</b>칸 안에 영웅 확정</span></div>
+      <div class="odds">${RARITY_ORDER.map((r) => `<div style="--r:${RARITY[r].color}"><b>${RARITY[r].name}</b><span>${odds[r] ? pctTxt(odds[r]) : '모두 보유'}</span></div>`).join('')}</div>
+      <p class="sub center tiny">한 칸당 확률 (원소 상자 기준, 지금 행운 포함) · 이미 가진 영웅은 다시 나오지 않아요</p>`}
+      <h3>영웅 도감 ${s.owned.length}/${CHAR_KEYS.length}</h3>
+      <div class="dex">${CHAR_KEYS.map((k) => { const C = CHARS[k], R = RARITY[C.rarity] || RARITY.start, own = SV.owns(k); return `<div class="dx ${own ? '' : 'locked'}" style="--r:${R.color}" data-c="${k}"><span class="pslot"></span><small>${own ? C.name : '???'}</small></div>`; }).join('')}</div>
+    </div>`);
+  $menu.querySelectorAll('.dx').forEach((d) => d.querySelector('.pslot').appendChild(portrait(d.dataset.c, 48, true)));
+  bind('.back', () => h.back());
+  bind('.open', (b) => {
+    const drops = SV.openBox(b.dataset.box);
+    if (!drops) return;
+    h.onGold?.();
+    openBox(h, b.dataset.box, drops);
+  });
+}
+// 상자 여는 연출: 누를 때마다 한 칸씩 (영웅이 나올 칸은 상자가 그 등급 색으로 빛남)
+function openBox(h, key, drops) {
+  const B = BOXES[key];
+  let i = -1;
+  show(`
+    <div class="boxopen" style="--bc:${B.color}">
+      <div class="rays"></div>
+      <div class="bstage">${chestHtml(B.color, 'huge ' + key)}</div>
+      <div class="reveal"></div>
+      <p class="left"></p>
+      <p class="tap">눌러서 열기</p>
+    </div>`);
+  const root = $menu.querySelector('.boxopen');
+  const chest = root.querySelector('.chest'), rev = root.querySelector('.reveal'), leftEl = root.querySelector('.left'), tap = root.querySelector('.tap');
+  // 남은 칸 중 가장 높은 등급 영웅
+  const heroLeft = () => drops.slice(i + 1).filter((d) => d.t === 'hero').sort((x, y) => RARITY_ORDER.indexOf(CHARS[y.c].rarity) - RARITY_ORDER.indexOf(CHARS[x.c].rarity))[0];
+  const setLeft = () => { const n = drops.length - i - 1; leftEl.textContent = n > 0 ? `남은 칸 ${n}` : ''; };
+  // 영웅이 남아 있으면 상자가 그 색으로 빛남 (브롤스타즈 느낌)
+  const glow = () => { const d = heroLeft(); chest.style.setProperty('--glow', d ? RARITY[CHARS[d.c].rarity].color : 'transparent'); chest.classList.toggle('hasHero', !!d); };
+  setLeft(); glow();
+  let busy = false;
+  const next = () => {
+    if (busy) return;
+    i++;
+    if (i >= drops.length) return summary();
+    const d = drops[i];
+    busy = true;
+    chest.classList.remove('pop'); void chest.offsetWidth; chest.classList.add('pop');
+    sfx(d.t === 'hero' ? 'chest' : 'ui');
+    setTimeout(() => {
+      busy = false;
+      setLeft(); glow();
+      if (d.t === 'gold') {
+        sfx('gold');
+        rev.innerHTML = `<div class="dcard gold ${d.jackpot ? 'jack' : ''}"><span class="coin">💰</span><b>+${d.n} G</b>${d.jackpot ? '<small>잭팟!</small>' : ''}</div>`;
+        root.classList.remove('herofx');
+      } else {
+        const C = CHARS[d.c], R = RARITY[C.rarity], E = ELEMENTS[C.el];
+        sfx('buy');
+        root.style.setProperty('--hr', R.color);
+        root.classList.add('herofx');
+        rev.innerHTML = `<div class="dcard hero" style="--r:${R.color};--c:${C.color}">
+          <span class="new">새 영웅!</span>
+          <span class="rname">${R.name}</span>
+          <span class="bslot"></span>
+          <b>${C.name}</b><small>${C.title} · <span style="color:${E.color}">${E.name}</span> · ${C.role}</small>
+          <p class="quote">“${C.quote}”</p>
+        </div>`;
+        rev.querySelector('.bslot').appendChild(portrait(d.c, 150, true));
+      }
+      tap.textContent = i + 1 < drops.length ? '눌러서 다음 칸' : '눌러서 마무리';
+    }, d.t === 'hero' ? 650 : 280);
+  };
+  const summary = () => {
+    const gold = drops.filter((d) => d.t === 'gold').reduce((a, d) => a + d.n, 0);
+    const hs = drops.filter((d) => d.t === 'hero');
+    const s = SV.S();
+    root.classList.remove('herofx');
+    root.innerHTML = `<div class="panel small sumbox">
+      <h2>${B.name}</h2>
+      <div class="sumlist">
+        ${hs.map((d) => `<div class="sh" style="--r:${RARITY[CHARS[d.c].rarity].color}" data-c="${d.c}"><span class="pslot"></span><b>${CHARS[d.c].name}</b><small>${RARITY[CHARS[d.c].rarity].name}</small></div>`).join('')}
+        <div class="sg">💰 <b>+${gold} G</b></div>
+      </div>
+      ${hs.length ? '' : `<p class="sub">이번엔 영웅이 없었어요… 🍀 행운이 쌓였어요 (${GACHA.pity - s.pity}칸 안에 확정)</p>`}
+      <div class="col">
+        ${hs.length ? `<button class="big go use" data-c="${hs[hs.length - 1].c}">${CHARS[hs[hs.length - 1].c].name}(으)로 출전</button>` : ''}
+        <button class="big again" ${SV.allOwned() || s.gold < B.price ? 'disabled' : ''}>한 번 더 (💰 ${B.price.toLocaleString()} G)</button>
+        <button class="linkbtn back">← 상자 목록 (보유 💰 ${s.gold.toLocaleString()} G)</button>
+      </div>
+    </div>`;
+    root.querySelectorAll('.sh').forEach((e) => e.querySelector('.pslot').appendChild(portrait(e.dataset.c, 56, true)));
+    bind('.use', (b) => { SV.setChar(b.dataset.c); h.onChar?.(b.dataset.c); toast(`${CHARS[b.dataset.c].name}(으)로 출전!`); boxes(h); });
+    bind('.again', () => { const d2 = SV.openBox(key); if (d2) { h.onGold?.(); openBox(h, key, d2); } });
+    bind('.back', () => boxes(h));
+  };
+  root.addEventListener('pointerdown', (e) => { if (i < drops.length && !e.target.closest('button')) next(); });
+  const onKey = (e) => { if (!root.isConnected) { removeEventListener('keydown', onKey); return; } if ((e.code === 'Space' || e.code === 'Enter') && i < drops.length) { e.preventDefault(); next(); } };
+  addEventListener('keydown', onKey);
 }
 
 // ---------- 스토리 장 선택 ----------

@@ -1,12 +1,12 @@
 // 저장: 기기(localStorage)에 계정별로 따로, 구글 계정이면 클라우드에도 (cloud.js)
-import { TREE, CHARS } from './data.js';
+import { TREE, CHARS, CHAR_KEYS, RARITY, RARITY_ORDER, BOXES, GACHA } from './data.js';
 
 const BASE = 'elementArena.v1';
 let account = null; // null = 게스트, 'g-<uid>' = 구글 계정
 const keyOf = (acc) => (acc ? `${BASE}:${acc}` : BASE);
 let KEY = keyOf(null);
 let onWrite = null;
-const DEF = { name: '', char: 'knight', owned: ['knight'], gold: 0, tree: [], cleared: 0, stats: { runs: 0, bestCombo: 0, kos: 0, bestLevel: 0, best: 0, wins: 0 }, muted: false };
+const DEF = { name: '', char: 'knight', owned: ['knight'], gold: 0, tree: [], cleared: 0, pity: 0, boxes: 0, stats: { runs: 0, bestCombo: 0, kos: 0, bestLevel: 0, best: 0, wins: 0 }, muted: false };
 let data = load();
 
 function load(raw) {
@@ -43,6 +43,58 @@ export function buyChar(c) {
   if (!C || owns(c) || data.gold < C.price) return false;
   data.gold -= C.price; data.owned.push(c); data.char = c; save();
   return true;
+}
+// ---------- 뽑기 ----------
+const unowned = () => CHAR_KEYS.filter((k) => !data.owned.includes(k) && RARITY[CHARS[k].rarity]?.chance > 0);
+export const allOwned = () => unowned().length === 0;
+// 지금 한 칸에서 각 등급 영웅이 나올 확률 (행운 포함)
+export function gachaOdds(box = 'small') {
+  const left = unowned();
+  const luck = (1 + data.pity * GACHA.luckPer) * BOXES[box].luck;
+  const o = {};
+  for (const r of RARITY_ORDER) o[r] = left.some((k) => CHARS[k].rarity === r) ? Math.min(0.5, RARITY[r].chance * luck) : 0;
+  return o;
+}
+function rollHero(box, force) {
+  const left = unowned();
+  if (!left.length) return null;
+  const odds = gachaOdds(box);
+  let tier = null;
+  if (force) {
+    // 확정: 남은 등급 중 기본 확률 비율대로
+    const tot = RARITY_ORDER.reduce((a, r) => a + (odds[r] ? RARITY[r].chance : 0), 0);
+    let x = Math.random() * tot;
+    for (const r of RARITY_ORDER) { if (!odds[r]) continue; x -= RARITY[r].chance; if (x <= 0) { tier = r; break; } }
+    tier ||= RARITY_ORDER.find((r) => odds[r]);
+  } else {
+    let x = Math.random();
+    for (const r of [...RARITY_ORDER].reverse()) { if (x < odds[r]) { tier = r; break; } x -= odds[r]; }
+  }
+  if (!tier) return null;
+  const pool = left.filter((k) => CHARS[k].rarity === tier);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+// 상자 열기: 골드를 내고 칸들을 굴림 → [{ t:'hero', c } | { t:'gold', n, jackpot }]
+export function openBox(box) {
+  const B = BOXES[box];
+  if (!B || data.gold < B.price || allOwned()) return null;
+  data.gold -= B.price;
+  const drops = [];
+  for (let i = 0; i < B.drops; i++) {
+    const c = rollHero(box, data.pity + 1 >= GACHA.pity);
+    if (c) { data.owned.push(c); data.pity = 0; drops.push({ t: 'hero', c }); continue; }
+    data.pity++;
+    const jackpot = Math.random() < GACHA.jackpot;
+    const [a, b] = jackpot ? GACHA.jackpotGold : B.gold;
+    const n = Math.round(a + Math.random() * (b - a));
+    data.gold += n;
+    drops.push({ t: 'gold', n, jackpot });
+  }
+  data.boxes = (data.boxes || 0) + 1;
+  // 영웅이 앞에 오면 김이 새므로 골드 → 영웅 순 (영웅끼리는 낮은 등급 먼저)
+  drops.sort((x, y) => (x.t === 'hero') - (y.t === 'hero') || (x.t === 'hero' ? RARITY_ORDER.indexOf(CHARS[x.c].rarity) - RARITY_ORDER.indexOf(CHARS[y.c].rarity) : 0));
+  save();
+  return drops;
 }
 export function addGold(n) { data.gold = Math.max(0, data.gold + Math.round(n)); save(); }
 export function canBuy(id) {

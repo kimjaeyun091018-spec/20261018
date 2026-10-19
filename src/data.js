@@ -68,13 +68,13 @@ export const REACTIONS = [
 export const CLASH = { even: 0.35, burst: { r: 56, dmg: 5, kb: [150, 220] } };
 
 // ---------- 캐릭터 12명 ----------
-// price: 골드 가격 (0 = 처음부터 보유)
+// rarity: 등급 (상자에서 나오는 확률) · price: 골드로 바로 영입하는 값 (매우 비쌈 → 보통은 상자에서 뽑기)
 // row: assets/heroes.png 디자인 줄 · role: 역할 · 스킬 0 = 기본 공격, 1~3 = 스킬
 // 스킬 종류(type): slash 베기 · shot 투사체 · dashstrike 돌진 베기 · stream 줄기 · blink 순간이동 · nova 주변 폭발
 //                  zone 지대 · line 줄지어 솟음 · snipe 저격 · markall 표식 · detonate 기폭
 export const CHARS = {
   knight: {
-    name: '카이엔', title: '홍련의 기사', price: 0,
+    name: '카이엔', title: '홍련의 기사', rarity: 'start', price: 0,
     lore: '멸망한 불꽃 왕국의 마지막 기사. 왕의 검에 깃든 꺼지지 않는 불꽃을 지키며, 다시는 아무것도 잃지 않겠다고 맹세했다.',
     quote: '이 불꽃이 꺼지는 일은 없다.', row: 0, el: 'fire', role: '근접 돌격', cloth: '#d32f2f', color: '#ff7043', hp: 130, speed: 175, weight: 1.15,
     desc: '삼연참으로 몰아붙이고, 불새 돌격으로 끝까지 날려 버리는 정면 돌격형.',
@@ -86,7 +86,7 @@ export const CHARS = {
     ],
   },
   archer: {
-    name: '세라', title: '뇌명의 사수', price: 400,
+    name: '세라', title: '뇌명의 사수', rarity: 'rare', price: 3000,
     lore: '번개가 떨어진 자리에서 태어났다는 숲의 사냥꾼. 활시위를 당길 때마다 머리카락이 곤두선다.',
     quote: '번개는 같은 곳에 두 번 안 떨어져. 내 화살은 떨어지지.', row: 1, el: 'lightning', role: '원거리 견제', cloth: '#f9a825', color: '#ffe14d', hp: 100, speed: 185, weight: 0.95,
     desc: '꿰뚫는 번개 화살과 뇌전 폭주. 물에 젖은 적에게는 감전 연쇄가 터짐.',
@@ -98,7 +98,7 @@ export const CHARS = {
     ],
   },
   mage: {
-    name: '노엘', title: '서리꽃 마법사', price: 600,
+    name: '노엘', title: '서리꽃 마법사', rarity: 'super', price: 6000,
     lore: '만년설 탑에서 자란 소년 마법사. 감정이 북받치면 주변에 눈꽃이 피어난다. 따뜻한 코코아를 제일 좋아한다.',
     quote: '추우면… 말해. 조금만 줄일게.', row: 2, el: 'ice', role: '제어', cloth: '#1e88e5', color: '#81d4fa', hp: 95, speed: 170, weight: 0.9,
     desc: '얼음으로 느리게 하고 3번 쌓이면 꽁꽁. 대지로 깨면 분쇄!',
@@ -110,7 +110,7 @@ export const CHARS = {
     ],
   },
   ninja: {
-    name: '하야테', title: '질풍', price: 500,
+    name: '하야테', title: '질풍', rarity: 'rare', price: 3000,
     lore: '바람 마을 최연소 상급 닌자. 너무 빨라서 그림자가 한 박자 늦게 따라온다는 소문이 있다.',
     quote: '보였어? 아니, 못 봤겠지.', row: 3, el: 'wind', role: '암살', cloth: '#2e7d32', color: '#a5d6a7', hp: 95, speed: 205, weight: 0.85,
     desc: '가장 빠른 캐릭터. 회오리로 적을 모으고 상태 이상을 퍼뜨림.',
@@ -122,7 +122,7 @@ export const CHARS = {
     ],
   },
   guardian: {
-    name: '바르곤', title: '산맥의 수호자', price: 700,
+    name: '바르곤', title: '산맥의 수호자', rarity: 'super', price: 6000,
     lore: '천 년 동안 산의 관문을 지켜 온 드워프 전사. 망치를 내려칠 때마다 대지가 대답한다.',
     quote: '지나가려면, 산을 옮겨 보거라.', row: 4, el: 'earth', role: '탱커', cloth: '#8d6e63', color: '#c49a6c', hp: 170, speed: 160, weight: 1.45,
     desc: '무겁고 단단함. 지진으로 띄우고, 얼어 있는 적을 산산조각.',
@@ -134,7 +134,7 @@ export const CHARS = {
     ],
   },
   priest: {
-    name: '마리나', title: '물결의 성녀', price: 500,
+    name: '마리나', title: '물결의 성녀', rarity: 'rare', price: 3000,
     lore: '해변 신전의 성녀. 누구에게나 다정하지만, 동료를 해치는 자에게는 파도처럼 무자비하다.',
     quote: '괜찮아요. 제가 곁에 있을게요.', row: 5, el: 'water', role: '지원', cloth: '#0288d1', color: '#4fc3f7', hp: 110, speed: 175, weight: 1,
     desc: '적을 적시고 아군을 치유. 번개·얼음·불과 엮으면 반응이 터짐.',
@@ -146,7 +146,7 @@ export const CHARS = {
     ],
   },
   sniper: {
-    name: '레이븐', title: '달 없는 밤', price: 900,
+    name: '레이븐', title: '달 없는 밤', rarity: 'epic', price: 12000,
     lore: '의뢰를 실패한 적 없는 그림자 길드의 저격수. 표식이 새겨진 순간, 결과는 이미 정해져 있다.',
     quote: '숨 쉬지 마. 조준이 흔들려.', row: 6, el: 'shadow', role: '저격', cloth: '#5e35b1', color: '#9c64ff', hp: 90, speed: 180, weight: 0.9,
     desc: '표식을 남기고 저격으로 터뜨리는 한 방 콤보. (쿠키런 저격수처럼)',
@@ -158,7 +158,7 @@ export const CHARS = {
     ],
   },
   alchemist: {
-    name: '피코', title: '괴짜 연금술사', price: 800,
+    name: '피코', title: '괴짜 연금술사', rarity: 'super', price: 6000,
     lore: '폭발 사고로 학원에서 세 번 쫓겨난 천재 소녀. 플라스크 속 초록 액체는 본인도 정체를 모른다.',
     quote: '실험은 실패해도 폭발은 성공이야!', row: 7, el: 'poison', role: '광역', cloth: '#558b2f', color: '#9ccc65', hp: 105, speed: 175, weight: 1,
     desc: '독을 쌓고 한 번에 기폭. 불과 엮으면 독 폭발.',
@@ -170,7 +170,7 @@ export const CHARS = {
     ],
   },
   berserker: {
-    name: '브란', title: '용암 심장', price: 1100,
+    name: '브란', title: '용암 심장', rarity: 'epic', price: 12000,
     lore: '화산섬의 투사. 심장에 용암이 흐른다는 전설처럼, 싸울수록 몸이 뜨거워진다.',
     quote: '더 와라! 아직 안 뜨겁다!', row: 8, el: 'fire', role: '근접 광역', cloth: '#8b2d1e', color: '#ff5722', hp: 150, speed: 170, weight: 1.3,
     desc: '대도끼를 휘두르며 회전 베기로 적 무리를 쓸어 버림. 도약해 내려찍기.',
@@ -182,7 +182,7 @@ export const CHARS = {
     ],
   },
   miko: {
-    name: '아마네', title: '천둥 신사의 무녀', price: 1200,
+    name: '아마네', title: '천둥 신사의 무녀', rarity: 'legend', price: 25000,
     lore: '번개신을 모시는 신사의 무녀. 부적에 적힌 글씨는 사실 할머니의 잔소리라는 소문이 있다.',
     quote: '하늘이 노했어요. …아, 제가 노한 거예요.', row: 9, el: 'lightning', role: '원거리 광역', cloth: '#d32f2f', color: '#ffe14d', hp: 95, speed: 180, weight: 0.9,
     desc: '따라가는 부적과 하늘에서 떨어지는 낙뢰. 젖은 적이 많을수록 강함.',
@@ -194,7 +194,7 @@ export const CHARS = {
     ],
   },
   reaper: {
-    name: '녹스', title: '영혼 수확자', price: 1500,
+    name: '녹스', title: '영혼 수확자', rarity: 'legend', price: 25000,
     lore: '길 잃은 영혼을 거두는 심연의 사신. 무섭게 생겼지만 길고양이를 보면 꼭 걸음을 멈춘다.',
     quote: '네 차례는 아직이야. 오늘은.', row: 10, el: 'shadow', role: '근접 제어', cloth: '#231b30', color: '#e040fb', hp: 120, speed: 180, weight: 1.05,
     desc: '거대한 낫으로 넓게 베고, 영혼 사슬로 적을 끌어와 수확.',
@@ -206,7 +206,7 @@ export const CHARS = {
     ],
   },
   pirate: {
-    name: '코랄', title: '폭풍 해적단 선장', price: 1000,
+    name: '코랄', title: '폭풍 해적단 선장', rarity: 'epic', price: 12000,
     lore: '바다 괴물을 대포 한 발로 쫓아냈다는 소문의 선장. 잃어버린 한쪽 눈 대신 바다의 별을 보며 항해한다.',
     quote: '닻 올려! 전부 쓸어버리자!', row: 11, el: 'water', role: '원거리 화력', cloth: '#1565c0', color: '#4fc3f7', hp: 110, speed: 180, weight: 1.05,
     desc: '권총 연사, 반동으로 밀려나는 대포, 닻을 던져 끌어오기.',
@@ -219,6 +219,24 @@ export const CHARS = {
   },
 };
 export const CHAR_KEYS = Object.keys(CHARS);
+
+// ---------- 뽑기 상자 (옛 브롤스타즈 상자처럼) ----------
+// 상자 하나 = 칸(drop) 여러 개. 칸마다: 아직 없는 영웅이 나올 수 있고, 아니면 골드
+// 영웅이 안 나올수록 '행운'이 쌓여 확률이 오름 (luckPer), pity칸 동안 안 나오면 다음 칸은 영웅 확정
+export const RARITY = {
+  start: { name: '기본', color: '#b0bec5', chance: 0 },
+  rare: { name: '희귀', color: '#66bb6a', chance: 0.045 },
+  super: { name: '초희귀', color: '#42a5f5', chance: 0.022 },
+  epic: { name: '영웅', color: '#ce93d8', chance: 0.011 },
+  legend: { name: '전설', color: '#ffca28', chance: 0.0045 },
+};
+export const RARITY_ORDER = ['rare', 'super', 'epic', 'legend'];
+export const BOXES = {
+  small: { name: '원소 상자', price: 120, drops: 1, luck: 1, color: '#42a5f5', gold: [25, 70] },
+  big: { name: '큰 원소 상자', price: 330, drops: 3, luck: 1.15, color: '#ab47bc', gold: [25, 70] },
+  mega: { name: '메가 원소 상자', price: 1000, drops: 10, luck: 1.35, color: '#ff7043', gold: [25, 70] },
+};
+export const GACHA = { luckPer: 0.06, pity: 45, jackpot: 0.04, jackpotGold: [220, 380] };
 // 영웅 그림: assets/heroes.png 한 칸 48x48 (발끝 46행), 한 줄 = 한 캐릭터
 //  0-3 서기 · 4-9 걷기 · 10 준비 · 11 공격 · 12 마무리 · 13 맞음 · 14 쓰러짐 · 15 승리
 // assets/portraits.png 한 칸 64x64 (캐릭터 순서대로 가로)
