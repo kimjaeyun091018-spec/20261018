@@ -1321,8 +1321,14 @@ function updateStory(s, dt) {
       if (choosing(s)) return; // 증강 고르는 동안은 기다림
       S.nextT -= dt;
       if (S.nextT <= 0) {
-        if (S.st + 1 >= STAGES_PER_CHAPTER) { S.phase = 'done'; S.t = 99; say(s, `${S.ch + 1}장 「${CHAPTERS[S.ch].name}」 클리어!`, 99); }
-        else startStage(s, S.ch, S.st + 1);
+        if (S.st + 1 < STAGES_PER_CHAPTER) startStage(s, S.ch, S.st + 1);
+        else if (S.ch + 1 < CHAPTERS.length) {
+          // 장이 끝나면 쉬지 않고 다음 장으로 (소울나이트처럼 한 판에 끝까지). 보상: % 회복 + 목숨 +1
+          for (const h of heroList(s)) { h.pct = 0; h.stocks = Math.min(STORY.maxLives, h.stocks + 1); }
+          startStage(s, S.ch + 1, 0);
+          fxPush(s, { k: 'chapter', ch: S.ch + 1, name: CHAPTERS[S.ch + 1].name, t: 2.5 });
+          say(s, `${S.ch + 2}장 「${CHAPTERS[S.ch + 1].name}」 — 목숨 +1, % 회복`, 2.6);
+        } else { S.phase = 'done'; S.t = 99; say(s, '모든 장을 돌파했다!', 99); }
       }
     }
   }

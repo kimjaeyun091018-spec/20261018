@@ -236,3 +236,20 @@ button.big.google { text-align: center; display: flex; gap: 10px; align-items: c
   .modes button.big { padding: 8px 14px; } .modes button.big b { font-size: 20px; } .lobby .foot { display: none; }
   .sinfo .quote { display: none; }
 }
+.route { display: flex; align-items: center; gap: 6px; margin: 12px 0 6px; }
+.rch { flex: 1; padding: 10px; border-radius: 12px; background: linear-gradient(135deg, var(--w), var(--f)); border: 1px solid rgba(255,255,255,.15); text-align: center; }
+.rch b { display: block; font-family: 'Black Han Sans', sans-serif; font-weight: 400; font-size: 20px; }
+.rch small { display: block; color: rgba(255,255,255,.75); font-size: 11px; margin-bottom: 6px; }
+.rch span { display: flex; gap: 4px; justify-content: center; }
+.rch i { width: 10px; height: 10px; border-radius: 50%; background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.3); }
+.rch i.boss { width: 14px; height: 14px; border-radius: 3px; background: rgba(120,0,0,.5); }
+.rch i.done { background: #ffd54f; border-color: #fff8e1; }
+.rarrow { color: var(--sub); font-size: 12px; }
+.sub.center { text-align: center; }
+.panel .go2.big { width: 100%; text-align: center; background: linear-gradient(135deg, #5b47b8, #2b2350); }
+.panel .col .go.big { margin-top: 0; }
+.nkin { width: 100%; font-size: 20px; text-align: center; padding: 12px; margin-top: 6px; }
+.nkst { min-height: 1.3em; margin: 6px 0 0; font-size: 13px; color: var(--sub); text-align: center; }
+.nkst.good { color: #69f0ae; }
+.nkst.bad { color: #ff8a80; }
+.nickfix { font-size: 16px; color: #fff; }

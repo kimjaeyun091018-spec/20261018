@@ -61,6 +61,8 @@ export async function googleSignIn() {
   };
   safeSet(AUTH_KEY, { uid: session.uid, refreshToken: session.refreshToken, name: session.name, email: session.email });
   au.signOut(auth).catch(() => {});
+  session.nick = await myNick(session.uid);
+  if (session.nick) safeSet(AUTH_KEY, { ...savedAccount(), nick: session.nick });
   return session;
 }
 export function signOut() {
@@ -82,7 +84,7 @@ async function auth() {
   try {
     const r = await postForm(`https://securetoken.googleapis.com/v1/token?key=${FIREBASE.apiKey}`, { grant_type: 'refresh_token', refresh_token: saved.refreshToken });
     session = { ...saved, uid: r.user_id, idToken: r.id_token, refreshToken: r.refresh_token, exp: Date.now() + Number(r.expires_in) * 1000 };
-    safeSet(AUTH_KEY, { uid: session.uid, refreshToken: session.refreshToken, name: session.name, email: session.email });
+    safeSet(AUTH_KEY, { uid: session.uid, refreshToken: session.refreshToken, name: session.name, email: session.email, nick: saved.nick });
     return session;
   } catch {
     throw new Error('구글 로그인이 만료됐어요. 다시 로그인해 주세요');
@@ -94,8 +96,44 @@ async function db(method, path, body) {
     method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(res.status === 401 || res.status === 403 ? '저장 권한이 없어요' : data?.error || `HTTP ${res.status}`);
+  if (!res.ok) {
+    const e = new Error(res.status === 401 || res.status === 403 ? '저장 권한이 없어요' : data?.error || `HTTP ${res.status}`);
+    e.status = res.status;
+    throw e;
+  }
   return data;
+}
+
+// ---------- 닉네임 (모든 사람 중에서 하나뿐) ----------
+// nicknames/{이름 키} = uid  — 데이터베이스 규칙이 "비어 있거나 내 것일 때만 쓰기"를 지켜 줘서 겹치지 않음
+// users/{uid}/eaName = 닉네임
+export const NICK_RULE = /^[가-힣A-Za-z0-9_]{2,10}$/;
+const nickKey = (n) => encodeURIComponent(String(n).trim().toLowerCase().replace(/[.$#[\]/%]/g, '_'));
+export async function myNick(uid) {
+  try { return (await db('GET', `users/${uid}/eaName`)) || null; } catch { return null; }
+}
+export async function nickOwner(name) {
+  try { return await db('GET', `nicknames/${nickKey(name)}`); } catch (e) {
+    if (e.status === 401 || e.status === 403) throw new Error('서버에 닉네임 칸이 아직 없어요 (README의 데이터베이스 규칙에 nicknames를 추가해 주세요)');
+    throw e;
+  }
+}
+export async function claimNick(uid, name, oldName) {
+  name = String(name || '').trim();
+  if (!NICK_RULE.test(name)) throw new Error('닉네임은 한글·영어·숫자·_ 로 2~10자만 쓸 수 있어요');
+  const owner = await nickOwner(name);
+  if (owner && owner !== uid) throw new Error('이미 다른 사람이 쓰고 있는 닉네임이에요');
+  try { await db('PUT', `nicknames/${nickKey(name)}`, uid); } catch (e) {
+    if (e.status === 401 || e.status === 403) throw new Error('이미 다른 사람이 쓰고 있는 닉네임이에요');
+    throw e;
+  }
+  await db('PUT', `users/${uid}/eaName`, name);
+  // 예전 닉네임은 다른 사람이 쓸 수 있게 놓아 줌
+  if (oldName && nickKey(oldName) !== nickKey(name)) db('DELETE', `nicknames/${nickKey(oldName)}`).catch(() => {});
+  const a = savedAccount();
+  if (a) safeSet(AUTH_KEY, { ...a, nick: name });
+  if (session) session.nick = name;
+  return name;
 }
 
 export async function pullSave(uid) {

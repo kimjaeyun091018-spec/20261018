@@ -95,7 +95,7 @@ export function lobby(h) {
         <div class="logo small"><span class="l1">원소</span><span class="l2">아레나</span></div>
         <div class="lstat">
           <span class="gold">💰 ${s.gold} G</span>
-          <span class="lvchip">🏆 ${s.cleared}장 클리어</span>
+          <span class="lvchip">🏆 최고 ${(s.stats.best || 0) >= 16 ? '완주' : s.stats.best ? `${Math.floor((s.stats.best - 1) / 5) + 1}-${((s.stats.best - 1) % 5) + 1}` : '-'}</span>
           <button class="achip" data-act="acct">${a ? `<span class="gdot">G</span> ${esc(a.name || '구글 계정')}` : '👤 게스트'}</button>
         </div>
       </header>
@@ -106,7 +106,9 @@ export function lobby(h) {
             <div class="hero-name"><b>${C.name}</b> <span class="ctitle">${C.title}</span></div>
             <div class="hero-tags"><span class="badge" style="background:${E.color}">${E.name}</span> <span class="role">${C.role}</span></div>
             <p class="quote">“${C.quote}”</p>
-            <div class="namerow"><label>닉네임</label><input id="nick" maxlength="10" placeholder="닉네임" value="${esc(s.name)}"></div>
+            ${a?.nick
+              ? `<div class="namerow"><label>닉네임</label><b class="nickfix">${esc(a.nick)}</b><button class="mini" data-act="nick">변경</button></div>`
+              : `<div class="namerow"><label>닉네임</label><input id="nick" maxlength="10" placeholder="닉네임" value="${esc(s.name)}"></div>`}
             <button class="swap" data-go="chars">영웅 바꾸기 (${s.owned.length}/${CHAR_KEYS.length})</button>
           </div>
         </section>
@@ -125,8 +127,9 @@ export function lobby(h) {
     </div>`);
   $menu.querySelector('.bustslot').appendChild(portrait(s.char, 160, true));
   const nick = $menu.querySelector('#nick');
-  nick.addEventListener('change', () => SV.setName(nick.value.trim()));
-  bind('[data-go]', (el) => { SV.setName(nick.value.trim()); h.go(el.dataset.go); });
+  nick?.addEventListener('change', () => SV.setName(nick.value.trim()));
+  bind('[data-go]', (el) => { if (nick) SV.setName(nick.value.trim()); h.go(el.dataset.go); });
+  bind('[data-act=nick]', () => nickname(h, { first: false }));
   bind('[data-act=acct]', () => $menu.querySelector('#acct').scrollIntoView({ behavior: 'smooth', block: 'center' }));
   account(h);
 }
@@ -147,6 +150,54 @@ export function account(h) {
   bind('.out', () => { if (confirm('로그아웃할까요? (진행은 클라우드에 남아 있어요)')) { h.logout(); h.refresh(); } });
 }
 // 처음 들어왔을 때: 구글로 로그인 / 게스트로 시작
+// ---------- 닉네임 정하기 (구글 계정, 다른 사람과 겹치면 안 됨) ----------
+export function nickname(h, opt = {}) {
+  const a = h.accountInfo();
+  show(`
+    <div class="loginwrap">
+      <div class="panel small loginbox">
+        <h2>${opt.first ? '닉네임 정하기' : '닉네임 바꾸기'}</h2>
+        <p class="sub">${opt.first ? '처음 오셨네요! 친구들에게 보일 닉네임을 정해 주세요.<br>' : ''}다른 사람과 같은 닉네임은 쓸 수 없어요. 한글·영어·숫자·_ 로 2~10자.</p>
+        <input id="nk" class="nkin" maxlength="10" placeholder="닉네임" value="${esc(a?.nick || '')}" autocomplete="off">
+        <p class="nkst" id="nkst">&nbsp;</p>
+        <div class="col">
+          <button class="big go ok" disabled>이 닉네임으로 정하기</button>
+          ${opt.first ? '<button class="linkbtn out">다른 계정으로 (로그아웃)</button>' : '<button class="linkbtn back">← 취소</button>'}
+        </div>
+      </div>
+    </div>`);
+  const inp = $menu.querySelector('#nk'), st = $menu.querySelector('#nkst'), ok = $menu.querySelector('.ok');
+  let timer = 0, seq = 0;
+  const setSt = (t, cls) => { st.textContent = t; st.className = 'nkst ' + (cls || ''); };
+  const check = () => {
+    const v = inp.value.trim();
+    ok.disabled = true;
+    if (!v) return setSt('\u00a0');
+    if (!h.nickRule.test(v)) return setSt('한글·영어·숫자·_ 로 2~10자만 쓸 수 있어요', 'bad');
+    if (v === a?.nick) return setSt('지금 쓰고 있는 닉네임이에요', '');
+    setSt('확인하는 중…');
+    const my = ++seq;
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      try {
+        const free = await h.nickFree(v);
+        if (my !== seq) return;
+        if (free) { setSt('✓ 쓸 수 있는 닉네임이에요', 'good'); ok.disabled = false; } else setSt('✗ 이미 다른 사람이 쓰고 있어요', 'bad');
+      } catch (e) { if (my === seq) setSt(e.message, 'bad'); }
+    }, 350);
+  };
+  inp.addEventListener('input', check);
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !ok.disabled) ok.click(); });
+  inp.focus();
+  check();
+  bind('.ok', async () => {
+    ok.disabled = true;
+    try { toast(await h.setNick(inp.value.trim())); h.done(); } catch (e) { setSt(e.message, 'bad'); }
+  });
+  bind('.out', () => { h.logout(); h.refresh(); });
+  bind('.back', () => h.done());
+}
+
 // ---------- 2. 로그인 메뉴 ----------
 export function login(h) {
   show(`
@@ -223,18 +274,22 @@ export function chars(h) {
 // ---------- 스토리 장 선택 ----------
 export function story(h) {
   const s = SV.S();
+  const best = s.stats.best || 0;
+  const bestTxt = best >= 16 ? '모든 장 돌파!' : best ? `${Math.floor((best - 1) / 5) + 1}-${((best - 1) % 5) + 1}` : '아직 없음';
   show(`
     <div class="panel">
       <div class="head"><button class="back">← 뒤로</button><h2>스토리 모드</h2><span class="gold">💰 ${s.gold} G</span></div>
-      <p class="sub">장마다 스테이지 5개 (마지막은 보스). 상자를 열어 골드를 모으고 스킬 트리를 강화하세요.<br>구덩이로 날려 보내면 바로 처치! 쓰러진 동료 옆에 서 있으면 부활합니다.</p>
-      <div class="chapters">${CHAPTERS.map((C, i) => {
-        const lock = i > s.cleared;
-        return `<button class="chap ${lock ? 'lock' : ''}" data-ch="${i}" ${lock ? 'disabled' : ''} style="--f:${C.floor[0]};--w:${C.wallTop}">
-          <b>${i + 1}장 · ${C.name}</b><small>${lock ? '🔒 이전 장을 클리어하세요' : i < s.cleared ? '✔ 클리어' : '도전!'}</small></button>`;
-      }).join('')}</div>
-      <label class="chk"><input type="checkbox" id="online"> 방 만들어 친구와 함께 (최대 4명)</label>
+      <p class="sub">모험은 언제나 <b>1-1</b>부터 시작해서, 쓰러지지 않는 한 <b>3-5</b>까지 쉬지 않고 이어집니다.<br>
+      레벨과 증강은 한 판 동안 계속 쌓이고, 전멸하면 처음부터! 모은 골드는 스킬 트리와 영웅 영입에 쓰세요.</p>
+      <div class="route">${CHAPTERS.map((C, i) => `<div class="rch" style="--f:${C.floor[0]};--w:${C.wallTop}"><b>${i + 1}장</b><small>${C.name}</small><span>${[1, 2, 3, 4, 5].map((n) => `<i class="${n === 5 ? 'boss' : ''} ${best >= i * 5 + n ? 'done' : ''}"></i>`).join('')}</span></div>`).join('<span class="rarrow">▶</span>')}</div>
+      <p class="sub center">🏆 최고 기록: <b>${bestTxt}</b> · 완주 ${s.stats.wins || 0}회</p>
+      <div class="col">
+        <button class="big go solo">모험 시작 (혼자)</button>
+        <button class="big go2 online">방 만들어 친구와 함께 (최대 4명)</button>
+      </div>
     </div>`);
-  bind('.chap', (el) => h.start({ mode: 'story', ch: Number(el.dataset.ch), online: $menu.querySelector('#online').checked }));
+  bind('.solo', () => h.start({ mode: 'story', ch: 0, online: false }));
+  bind('.online', () => h.start({ mode: 'story', ch: 0, online: true }));
   bind('.back', () => h.back());
 }
 

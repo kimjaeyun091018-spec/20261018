@@ -6,7 +6,7 @@ let account = null; // null = 게스트, 'g-<uid>' = 구글 계정
 const keyOf = (acc) => (acc ? `${BASE}:${acc}` : BASE);
 let KEY = keyOf(null);
 let onWrite = null;
-const DEF = { name: '', char: 'knight', owned: ['knight'], gold: 0, tree: [], cleared: 0, stats: { runs: 0, bestCombo: 0, kos: 0, bestLevel: 0 }, muted: false };
+const DEF = { name: '', char: 'knight', owned: ['knight'], gold: 0, tree: [], cleared: 0, stats: { runs: 0, bestCombo: 0, kos: 0, bestLevel: 0, best: 0, wins: 0 }, muted: false };
 let data = load();
 
 function load(raw) {

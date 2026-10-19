@@ -8,7 +8,7 @@ import { initAudio, fxSound, setMuted as audioMute, sfx } from './audio.js';
 import * as NET from './net.js';
 import * as SV from './save.js';
 import * as UI from './ui.js';
-import { preloadGoogle, googleSignIn, googleError, signOut, savedAccount, pullSave, queuePush, flushPush, cloudStatus, onCloudStatus } from './cloud.js';
+import { preloadGoogle, googleSignIn, googleError, signOut, savedAccount, pullSave, queuePush, flushPush, cloudStatus, onCloudStatus, myNick, nickOwner, claimNick, NICK_RULE } from './cloud.js';
 
 const canvas = document.getElementById('game');
 const R = createRenderer(canvas);
@@ -37,23 +37,36 @@ const handlers = {
   retry() { quitGame(true); startGame(game_last); },
 };
 let game_last = null;
-function toMenu() { history.length = 0; history.push('lobby'); UI.lobby(handlers); }
+function toMenu() {
+  history.length = 0;
+  // 구글 계정인데 닉네임을 아직 안 정했으면 먼저 정하기
+  if (gAcc && !gAcc.nick) { UI.nickname(handlers, { first: true }); return; }
+  history.push('lobby'); UI.lobby(handlers);
+}
 
 // ---------- 구글 계정 · 클라우드 저장 ----------
 const SEEN_KEY = 'elementArena.started';
-let gAcc = savedAccount(); // { uid, name, email } 또는 null
+let gAcc = savedAccount(); // { uid, name, email, nick } 또는 null
 if (gAcc) SV.useAccount(`g-${gAcc.uid}`);
 SV.onSaveWrite((d) => { if (gAcc) queuePush(gAcc.uid, d); });
 onCloudStatus(() => { if (!game && history[history.length - 1] === 'lobby') UI.account(handlers); });
 Object.assign(handlers, {
-  accountInfo: () => (gAcc ? { name: gAcc.name, status: cloudStatus() } : null),
+  accountInfo: () => (gAcc ? { name: gAcc.nick || gAcc.name, nick: gAcc.nick, status: cloudStatus() } : null),
+  nickRule: NICK_RULE,
+  async nickFree(name) { const o = await nickOwner(name); return !o || o === gAcc?.uid; },
+  async setNick(name) {
+    const n = await claimNick(gAcc.uid, name, gAcc.nick);
+    gAcc.nick = n;
+    SV.setName(n);
+    return `닉네임 「${n}」 으로 정했어요`;
+  },
   preload: () => { preloadGoogle().catch(() => {}); },
   refresh: () => { if (game) return; if (!gAcc && !localStorage.getItem(SEEN_KEY)) UI.login(handlers); else toMenu(); },
   async google() {
     let r;
     try { r = await googleSignIn(); } catch (e) { throw new Error(googleError(e)); }
     const carry = JSON.parse(JSON.stringify(SV.S())); // 지금(게스트) 진행
-    gAcc = { uid: r.uid, name: r.name, email: r.email };
+    gAcc = { uid: r.uid, name: r.name, email: r.email, nick: r.nick || null };
     const acc = `g-${r.uid}`;
     const hadLocal = SV.hasLocal(acc);
     SV.useAccount(acc);
@@ -63,7 +76,7 @@ Object.assign(handlers, {
     if (cloud && cloud.t >= (hadLocal ? SV.S()._t || 0 : 0)) { SV.replaceWith(cloud.save, cloud.t); note = '클라우드 저장을 불러왔어요'; }
     else if (hadLocal) { SV.save(); note = '이 기기의 저장을 클라우드에 올렸어요'; }
     else { SV.replaceWith(carry, Date.now()); SV.save(); note = '지금까지의 진행을 구글 계정으로 옮겼어요'; }
-    if (!SV.S().name && r.name) SV.setName(r.name.slice(0, 10));
+    if (gAcc.nick) SV.setName(gAcc.nick);
     localStorage.setItem(SEEN_KEY, '1');
     return `${r.name || '구글'} 계정으로 로그인했어요. ${note}`;
   },
@@ -83,6 +96,7 @@ Object.assign(handlers, {
   toStart() { history.length = 0; UI.start(handlers); },
 });
 // 다시 들어왔을 때: 다른 기기에서 한 진행이 더 최근이면 받아 옴
+if (gAcc && !gAcc.nick) myNick(gAcc.uid).then((n) => { if (n) { gAcc.nick = n; SV.setName(n); } });
 if (gAcc) handlers.sync().then(() => { if (!game && history[history.length - 1] === 'lobby') toMenu(); }).catch((e) => console.warn('클라우드 불러오기 실패', e));
 
 // ---------- 입력 ----------
@@ -320,16 +334,20 @@ function checkEnd() {
   if (s.mode === 'story' && (s.story.phase === 'done' || s.story.phase === 'fail') && s.story.t < 97.5) {
     g.ended = true;
     const win = s.story.phase === 'done';
-    if (win) SV.clearChapter(s.story.ch);
+    // 도달한 곳 (1-1 = 1 … 3-5 = 15, 끝까지 깨면 16)
+    const reached = s.story.ch * 5 + s.story.st + 1 + (win ? 1 : 0);
+    const prevBest = SV.S().stats.best || 0;
+    SV.stat('best', reached, true);
+    if (win) { SV.stat('wins', 1); SV.clearChapter(2); }
+    else SV.clearChapter(Math.max(-1, s.story.ch - 1));
     const gold = s.gold;
     settle(g);
     const me = s.heroes[g.myId];
-    const hasNext = win && s.story.ch + 1 < 3;
-    g.cfg.ch = s.story.ch;
     SV.stat('bestLevel', s.level, true);
     UI.hideAug();
-    UI.result(handlers, { win, title: win ? `${s.story.ch + 1}장 클리어!` : '전멸…', gold, combo: me?.maxCombo || 0, level: s.level, augs: me?.augs || [], next: hasNext && g.role === 'solo', retry: true,
-      note: win ? '골드로 스킬 트리를 강화하거나 새 영웅을 영입하세요.' : '모은 골드는 그대로 받습니다. 강해져서 다시 도전!' });
+    const where = `${s.story.ch + 1}-${s.story.st + 1}`;
+    UI.result(handlers, { win, title: win ? '모험 완료!' : `${where}에서 전멸…`, gold, combo: me?.maxCombo || 0, level: s.level, augs: me?.augs || [], retry: true,
+      note: (reached > prevBest && !win ? '🏆 최고 기록 갱신! ' : '') + (win ? '모든 장을 돌파했어요! 골드로 새 영웅을 영입해 다시 도전해 보세요.' : '모은 골드는 그대로 받습니다. 다음 모험은 다시 1-1부터!') });
   }
   // 콜로세움: 봇 상대로 이기면 골드 (판마다 한 번)
   if (s.mode === 'colosseum' && s.colo.over && !g.coloPaid) {

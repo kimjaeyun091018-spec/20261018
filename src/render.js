@@ -214,6 +214,7 @@ export function createRenderer(canvas) {
         case 'react': punch = Math.max(punch, 0.02); break;
         case 'lethal': punch = Math.max(punch, f.hero ? 0.09 : 0.045); slowmo = f.hero ? 0.35 : 0.18; flash = f.hero ? 0.22 : 0.1; flashCol = f.hero ? '#e3f2fd' : '#ffffff'; break;
         case 'cast': anim.set(f.who, { t: performance.now(), i: f.i, type: f.type }); break;
+        case 'chapter': banners.push({ text: `${f.ch + 1}장`, sub: f.name, color: '#80d8ff', t: 2.4, max: 2.4 }); break;
         case 'levelup': banners.push({ text: `LEVEL ${f.lv}`, sub: '레벨 업! 증강을 고르세요', color: '#ffd54f', t: 1.8, max: 1.8 }); break;
         case 'pickup': ui.say(f.x, f.y - 20, f.name, f.color, 16); break;
         case 'augpick': { const A = AUGMENTS.find((a) => a.id === f.aug); if (A) ui.say(f.x, f.y - 50, `${A.icon} ${A.name}`, f.legend ? '#ff9100' : '#ffe082', f.legend ? 22 : 18); break; }
