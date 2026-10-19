@@ -1823,7 +1823,7 @@ export function snapshot(s) {
     ic: [...s.ice.keys()],
     al: s.allies.map((a) => [a.id, r1(a.x), r1(a.y), r1(a.face), a.color, a.throwT > 0.75 ? 1 : 0]),
     bb: bossBar(s),
-    s: s.shots.map((p) => [p.id, p.look, r1(p.x), r1(p.y), r1(Math.atan2(p.vy, p.vx)), p.r, p.el || 0, r1(p.z || 0), p.team === 'E' ? 1 : 0]),
+    s: s.shots.map((p) => [p.id, p.look, r1(p.x), r1(p.y), r1(Math.atan2(p.vy, p.vx)), p.r, p.el || 0, r1(p.z || 0), p.team === 'E' ? 1 : 0, p.team]),
     z: s.zones.map((z) => [z.id, z.look, r1(z.x), r1(z.y), z.r, r1(z.t), r1(z.life)]),
     hz: s.hazards.map((z) => [r1(z.x), r1(z.y), z.r, r1(z.t), z.snow ? 1 : 0]),
     it: s.items.map((it) => [it.id, it.kind, r1(it.x), r1(it.y), r1(it.z), r1(it.t)]),

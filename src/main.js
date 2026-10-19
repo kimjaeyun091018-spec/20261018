@@ -133,6 +133,8 @@ function toCanvas(e) {
   return { x: ((e.clientX - r.left) / r.width) * VIEW_W, y: ((e.clientY - r.top) / r.height) * VIEW_H };
 }
 canvas.addEventListener('mousemove', (e) => { Object.assign(mouse, toCanvas(e)); mouse.inside = true; });
+// 마우스는 화면 좌표로 받고, 쓸 때 카메라(확대)를 거쳐 세계 좌표로
+const mouseW = () => R.toWorld(mouse.x, mouse.y);
 canvas.addEventListener('mousedown', (e) => { initAudio(); if (e.button === 0) { mouse.down = true; tapped.add('atk'); } if (e.button === 2) tapped.add('s1'); });
 addEventListener('mouseup', (e) => { if (e.button === 0) mouse.down = false; });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -215,8 +217,9 @@ function readInput(snapMe, snap) {
   if (snapMe) {
     const t = findTarget(snapMe, snap);
     if (!isTouch && mouse.inside) {
-      inp.aim = Math.atan2(mouse.y - snapMe.y + 8, mouse.x - snapMe.x);
-      inp.ad = Math.hypot(mouse.x - snapMe.x, mouse.y - snapMe.y);
+      const m = mouseW();
+      inp.aim = Math.atan2(m.y - snapMe.y + 8, m.x - snapMe.x);
+      inp.ad = Math.hypot(m.x - snapMe.x, m.y - snapMe.y);
       // 살짝 도와주는 조준: 조준경이 잡은 적 쪽으로 거의 겨누고 있으면 정확히 맞춤
       if (t && t.diff < 0.2) { inp.aim = Math.atan2(t.y - snapMe.y, t.x - snapMe.x); inp.ad = t.d; }
     } else if (t) { inp.aim = Math.atan2(t.y - snapMe.y, t.x - snapMe.x); inp.ad = t.d; }
@@ -232,7 +235,8 @@ function findTarget(me, snap) {
   const foes = [];
   for (const e of snap.e) if (!e[10] && !(e[6] > 0)) foes.push({ k: 'e', id: e[0], x: e[2], y: e[3] });
   for (const h of snap.h) if (h.tm !== me.tm && h.al && !(h.fa > 0)) foes.push({ k: 'h', id: h.id, x: h.x, y: h.y });
-  const mouseAim = !isTouch && mouse.inside ? Math.atan2(mouse.y - me.y + 8, mouse.x - me.x) : null;
+  const mw = mouseW();
+  const mouseAim = !isTouch && mouse.inside ? Math.atan2(mw.y - me.y + 8, mw.x - me.x) : null;
   let best = null, bs = 1e9;
   for (const f of foes) {
     const d = Math.hypot(f.x - me.x, f.y - me.y);

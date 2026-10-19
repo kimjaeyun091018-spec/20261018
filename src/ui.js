@@ -361,7 +361,7 @@ function skillDemo(char, i) {
       const h = state.heroes.me; h.pct = 0; h.inv = 99;
       if (t >= CYCLE) { t = 0; SIM.demoReset(state, { shots: S.type === 'parry' }); }
     }
-    R.render(SIM.snapshot(state), 'me', { noHud: true, shakeMul: 0.4 });
+    R.render(SIM.snapshot(state), 'me', { noHud: true, shakeMul: 0.4, fixedCam: true });
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

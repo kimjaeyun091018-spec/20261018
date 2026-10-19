@@ -188,8 +188,10 @@ export function createRenderer(canvas) {
   }
   const ui = {
     number(f) {
-      const sz = clamp(15 + f.v * 0.55, 15, 40) * (f.crit ? 1.35 : 1);
-      texts.push({ x: f.x + rnd(-8, 8), y: f.y - 14, vx: rnd(-40, 40), vy: -170, text: f.onHero ? `${f.v}%` : f.crit ? `${f.v}!` : String(f.v), size: f.onHero ? sz * 0.85 : sz, color: f.onHero ? '#ff8a80' : f.crit ? '#ffd54f' : f.react ? '#fff59d' : f.el ? elColor(f.el) : '#ffffff', life: 0.8, max: 0.8, pop: 1, grav: 380 });
+      // 작게, 캐릭터 옆으로 비켜서 (캐릭터가 가려지지 않게)
+      const sz = clamp(11 + f.v * 0.22, 11, 20) * (f.crit ? 1.2 : 1);
+      const side = Math.random() < 0.5 ? -1 : 1;
+      texts.push({ x: f.x + side * rnd(16, 26), y: f.y - 24, vx: side * rnd(30, 70), vy: -140, text: f.onHero ? `${f.v}%` : f.crit ? `${f.v}!` : String(f.v), size: f.onHero ? sz * 0.85 : sz, color: f.onHero ? '#ff8a80' : f.crit ? '#ffd54f' : f.react ? '#fff59d' : f.el ? elColor(f.el) : '#ffffff', life: 0.8, max: 0.8, pop: 1, grav: 380 });
     },
     // 원소 반응 이름: 캐릭터를 가리지 않게 화면 오른쪽 콤보 옆 작은 목록으로
     react(f) { reacts.unshift({ text: f.name, color: f.color, t: 2.2 }); if (reacts.length > 4) reacts.length = 4; },
@@ -861,10 +863,14 @@ export function createRenderer(canvas) {
     drawVoid(ctx, now);
     const sx = (Math.random() * 2 - 1) * shake * (opt.shakeMul ?? 1), sy = (Math.random() * 2 - 1) * shake * (opt.shakeMul ?? 1);
     const z = 1 + punch;
+    // 자동 카메라: 땅이 화면보다 작으면 확대, 땅이 넓어지면 다시 축소 (부드럽게)
+    updateCam(snap, dt, opt);
     // 확대는 KO 확정 대상 쪽으로
     const lethal = fxList.find((f) => f.k === 'lethal' && f.t > f.life - 0.3);
-    const cx = lethal ? lethal.x : VIEW_W / 2, cy = lethal ? lethal.y : VIEW_H / 2;
-    ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * (sx - cx * (z - 1)), dpr * (sy - cy * (z - 1)));
+    const cx = lethal ? lethal.x : cam.x, cy = lethal ? lethal.y : cam.y;
+    ctx.setTransform(dpr, 0, 0, dpr, dpr * sx, dpr * sy);
+    applyCam();
+    ctx.translate(cx, cy); ctx.scale(z, z); ctx.translate(-cx, -cy);
     // 지도 (무너진 단계별로 캐시)
     const warns = snap.wn || [];
     const bigWarn = warns.find((w) => w[4]);
@@ -952,7 +958,19 @@ export function createRenderer(canvas) {
     for (const b of bodies) b.d();
     drawReticle(snap, opt.target, now, dt);
     P.draw(ctx, 'normal');
+    // 투사체 테두리: 적은 빨강, 아군(우리 팀)은 파랑
+    const myTeam = snap.h.find((h) => h.id === me)?.tm ?? 1;
     for (const sh of snap.s) drawShot(ctx, sh, now, P, dt);
+    ctx.save();
+    for (const sh of snap.s) {
+      const [, look, x, y, , r, , zz = 0, , tm] = sh;
+      const foe = tm !== undefined ? tm !== myTeam : !!sh[8];
+      const R = Math.min(48, r + 6), yy = y - zz;
+      const col = foe ? '255,45,45' : '61,155,255';
+      ctx.strokeStyle = `rgba(${col},.3)`; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(x, yy, R, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = `rgba(${col},.95)`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, yy, R, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
     for (const f of fxList) if (!groundFx.has(f.k) && f.k !== 'pillar') drawFx(ctx, f, now);
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; P.draw(ctx, 'add'); ctx.restore();
     for (const t of texts) {
@@ -960,7 +978,7 @@ export function createRenderer(canvas) {
       ctx.save();
       ctx.globalAlpha = clamp(k * 2.5, 0, 1);
       ctx.translate(t.x, t.y);
-      const s = 1 + t.pop * (t.react ? 0.5 : 0.6);
+      const s = 1 + t.pop * (t.react ? 0.5 : 0.25);
       ctx.scale(s, s);
       if (t.react) label(t.text, 0, 0, t.color, t.size, { strokeColor: '#1a0b2e', stroke: 7 });
       else label(t.text, 0, 0, t.color, t.size);
@@ -978,7 +996,7 @@ export function createRenderer(canvas) {
     const meH = snap.h.find((h) => h.id === me);
     if (meH && meH.al && opt.aim) {
       const ax = meH.x + Math.cos(meH.a) * 38, ay = meH.y - 10 + Math.sin(meH.a) * 38;
-      ctx.save(); ctx.translate(ax, ay); ctx.rotate(meH.a);
+      ctx.save(); applyCam(); ctx.translate(ax, ay); ctx.rotate(meH.a);
       ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-3, -5); ctx.lineTo(-1, 0); ctx.lineTo(-3, 5); ctx.fill();
       ctx.restore();
     }
@@ -1019,10 +1037,39 @@ export function createRenderer(canvas) {
     ctx.fillStyle = '#ff5252'; ctx.fillRect(-1.5, -1.5, 3, 3);
     ctx.restore();
   }
+  // ---------- 자동 카메라 ----------
+  const cam = { x: VIEW_W / 2, y: VIEW_H / 2, z: 1, key: '', box: null };
+  function mapBox(rows) {
+    let x0 = COLS, y0 = ROWS, x1 = -1, y1 = -1;
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (rows[y] && rows[y][x] !== 'o') { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    return x1 < 0 ? null : { x0: x0 * TILE, y0: y0 * TILE, x1: (x1 + 1) * TILE, y1: (y1 + 1) * TILE };
+  }
+  function updateCam(snap, dt, opt) {
+    if (opt.fixedCam || !snap.mp) { cam.x = VIEW_W / 2; cam.y = VIEW_H / 2; cam.z = 1; return; }
+    const key = snap.mk + '|' + snap.mv;
+    if (key !== cam.key) { cam.key = key; cam.box = mapBox(snap.mp); if (cam.reset !== snap.mk) { cam.reset = snap.mk; cam.snap = true; } }
+    const B = cam.box;
+    let tz = 1, tx = VIEW_W / 2, ty = VIEW_H / 2;
+    if (B) {
+      const pad = TILE * 1.6, hudTop = 46, hudBot = 70; // 위·아래 HUD에 가리지 않게 여유
+      const w = B.x1 - B.x0 + pad * 2, h = B.y1 - B.y0 + pad * 2;
+      tz = clamp(Math.min(VIEW_W / w, (VIEW_H - hudTop - hudBot) / h), 1, 1.6);
+      tx = (B.x0 + B.x1) / 2; ty = (B.y0 + B.y1) / 2 - (hudTop - hudBot) / 2 / tz;
+      // 화면 밖(세계 바깥)이 너무 보이지 않게 가운데를 묶음
+      const hw = VIEW_W / 2 / tz, hh = VIEW_H / 2 / tz;
+      tx = clamp(tx, hw, VIEW_W - hw); ty = clamp(ty, hh - (hudBot - hudTop) / tz, VIEW_H - hh + hudBot / tz);
+    }
+    const k = cam.snap ? 1 : 1 - Math.exp(-2.2 * dt);
+    cam.snap = false;
+    cam.z += (tz - cam.z) * k; cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k;
+  }
+  function applyCam() { ctx.translate(VIEW_W / 2, VIEW_H / 2); ctx.scale(cam.z, cam.z); ctx.translate(-cam.x, -cam.y); }
+  // 화면 좌표 → 세계 좌표 (마우스 조준용)
+  function toWorld(x, y) { return { x: (x - VIEW_W / 2) / cam.z + cam.x, y: (y - VIEW_H / 2) / cam.z + cam.y }; }
   function drawVoidTile(x, y, now) {
     if (!nebula) nebula = buildNebula();
     ctx.drawImage(nebula, x * TILE, y * TILE, TILE, TILE, x * TILE, y * TILE, TILE, TILE);
   }
   function reset() { P.list.length = 0; fxList.length = 0; texts.length = 0; ghosts.length = 0; banners.length = 0; shake = 0; flash = 0; slowmo = 0; }
-  return { render, hooks, particles: P, resize, reset };
+  return { render, hooks, particles: P, resize, reset, toWorld, cam };
 }
