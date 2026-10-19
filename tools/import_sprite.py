@@ -1,6 +1,8 @@
 """AI로 만든 '도트풍' 그림(큰 해상도, 분홍 배경) → 진짜 1픽셀 도트로 바꾸기
 
-  python3 tools/import_sprite.py 원본.png 결과.png [픽셀크기]
+  python3 tools/import_sprite.py 원본.png 결과.png [픽셀크기] [목표키]
+
+목표 키를 주면 (예: 40) 원본 도트가 더 촘촘할 때 그 키로 줄입니다 (색은 원본 색 중에서, 외곽선 우선).
 
 1) 픽셀 크기(원본에서 도트 한 칸이 몇 px인지)를 가장자리 간격으로 추정
 2) 칸마다 가운데 색을 골라 1픽셀로
@@ -32,7 +34,39 @@ def estimate_pixel(im, mask, x0):
     return float(ok.max())
 
 
-def main(src, out, p=None):
+def shrink(img, H):
+    """촘촘한 도트를 키 H로 줄이기: 원본 색(48색)만 쓰고, 칸마다 가장 많은 색 (외곽선·금색은 조금 우선)"""
+    w, h = img.size
+    if h <= H:
+        return img
+    W = round(w * H / h)
+    arr = np.array(img)
+    alpha = arr[:, :, 3] > 0
+    q = Image.fromarray(arr[:, :, :3]).quantize(colors=48, method=Image.Quantize.MEDIANCUT)
+    idx = np.array(q)
+    pal = np.array(q.getpalette()[:48 * 3]).reshape(-1, 3)
+    lum = pal.sum(1)
+    res = np.zeros((H, W, 4), np.uint8)
+    sx, sy = w / W, h / H
+    for y in range(H):
+        for x in range(W):
+            x0, y0 = int(x * sx), int(y * sy)
+            x1, y1 = max(x0 + 1, int((x + 1) * sx)), max(y0 + 1, int((y + 1) * sy))
+            a = alpha[y0:y1, x0:x1]
+            if a.mean() < 0.5:
+                continue
+            c = Counter(idx[y0:y1, x0:x1][a].tolist())
+            gold = lambda k: pal[k][0] > 200 and pal[k][1] > 140 and pal[k][2] < 120
+            best = max(c, key=lambda k: c[k] * (1.6 if lum[k] < 110 else 1) * (1.3 if gold(k) else 1))
+            col = pal[best]
+            if col[0] > 200 and col[2] > 150 and col[1] < 200:  # 분홍이 섞인 반짝이 → 노란 빛
+                col = (255, 245, 157)
+            res[y, x, :3] = col
+            res[y, x, 3] = 255
+    return Image.fromarray(res, 'RGBA')
+
+
+def main(src, out, p=None, target=None):
     im = np.array(Image.open(src).convert('RGB')).astype(int)
     mask = np.array([[is_bg(px) for px in row] for row in im[::1]]) if im.shape[0] < 1 else (
         (im[:, :, 0] > 170) & (im[:, :, 2] > 170) & (im[:, :, 1] < 110))
@@ -87,6 +121,9 @@ def main(src, out, p=None):
     res[lab != big] = 0
     img = Image.fromarray(res, 'RGBA')
     img = img.crop(img.getbbox())
+    if target:
+        img = shrink(img, int(target))
+        img = img.crop(img.getbbox())
     img.save(out)
     print(f'픽셀 크기 {p:.2f}px → {img.size[0]}x{img.size[1]}')
 

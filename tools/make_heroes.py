@@ -317,8 +317,10 @@ def sprite_frames(key):
     leg_y, leg_split = S['legs']
     ox, oy = S.get('place', ((FW - w) // 2, FH - 2 - h))
     A = dict(rest=0, windup=-150, strike=-25, follow=25, hurt=12, win=-115)
+    A.update(S.get('ang', {}))
+    push = S.get('push', {})  # 활 등: 무기를 돌리지 않고 앞뒤로만
 
-    def compose(bob=0, lean=0, la=0, lb=0, wa=0, hurt=False):
+    def compose(bob=0, lean=0, la=0, lb=0, wa=0, hurt=False, wpush=0):
         f = Image.new('RGBA', (FW, FH), (0, 0, 0, 0))
         # 몸: 다리 줄 위만 흔들림
         top = body.crop((0, 0, w, leg_y))
@@ -329,7 +331,7 @@ def sprite_frames(key):
             lift = 1 if ph > 0 else 0
             f.alpha_composite(leg, (ox + x0 + ph + lean // 2, oy + leg_y - lift))
         r, (cx, cy) = rotated(wep, pivot, wa)
-        f.alpha_composite(r, (ox + lean - cx + pivot[0], oy + bob - cy + pivot[1]))
+        f.alpha_composite(r, (ox + lean + wpush - cx + pivot[0], oy + bob - cy + pivot[1]))
         return f
 
     frames = []
@@ -341,11 +343,11 @@ def sprite_frames(key):
             la = round(math.sin(k) * 1.6)
             frames.append(compose(bob=1 if (i - 4) % 3 == 0 else 0, lean=0, la=la, lb=-la, wa=round(math.sin(k) * 5)))
         elif i == 10:
-            frames.append(compose(lean=-1, wa=A['windup']))
+            frames.append(compose(lean=-1, wa=A['windup'], wpush=push.get('windup', 0)))
         elif i == 11:
-            frames.append(compose(lean=2, wa=A['strike']))
+            frames.append(compose(lean=2 if not push else 0, wa=A['strike'], wpush=push.get('strike', 0)))
         elif i == 12:
-            frames.append(compose(lean=1, wa=A['follow']))
+            frames.append(compose(lean=1 if not push else 0, wa=A['follow'], wpush=push.get('follow', 0)))
         elif i == 13:
             frames.append(compose(lean=-2, bob=1, wa=A['hurt']))
         elif i == 14:
@@ -357,9 +359,10 @@ def sprite_frames(key):
             frames.append(compose(bob=-1, wa=A['win']))
     # 얼굴 그림: 머리 부분을 3배로
     hx0, hy0, hs = S['face']
-    crop = img.crop((hx0, hy0, hx0 + hs, hy0 + hs)).resize((hs * 3, hs * 3), Image.NEAREST)
+    k = max(1, 64 // hs)
+    crop = img.crop((hx0, hy0, hx0 + hs, hy0 + hs)).resize((hs * k, hs * k), Image.NEAREST)
     port = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
-    port.alpha_composite(crop, ((64 - hs * 3) // 2, 64 - hs * 3))
+    port.alpha_composite(crop, ((64 - hs * k) // 2, 64 - hs * k))
     return frames, port
 
 

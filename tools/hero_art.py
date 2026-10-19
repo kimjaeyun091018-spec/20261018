@@ -177,6 +177,8 @@ HEROES['archer'] = dict(
         '..GG..',
     ], pivot=(5, 6)),
     kind='bow', legs=('p', 'o', 'O'), arm='a', glove='c',
+    sprite=dict(file='tools/art/archer.png', weapon_from=(29, 13), pivot=(31, 27), legs=(34, 20), face=(4, 0, 32),
+                ang=dict(rest=0, windup=0, strike=0, follow=0, hurt=8, win=-20), push=dict(windup=-1, strike=2, follow=1)),
 )
 
 # =====================================================================
