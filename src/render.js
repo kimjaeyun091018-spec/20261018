@@ -397,7 +397,7 @@ export function createRenderer(canvas) {
 
   // ---------- 적 ----------
   function drawEnemy(e, now, dt) {
-    const [id, type, x, y, hp, mh, fall, fl, face, st, spawning, z, boss, act, actA, ln] = e;
+    const [id, type, x, y, hp, mh, fall, fl, face, st, spawning, z, boss, act, actA, ln, sg] = e;
     const sc = fall > 0 ? clamp(fall / 0.6, 0.05, 1) : 1;
     if (ln && Math.random() < 0.8) P.add({ kind: 'smoke', x: x + rnd(-4, 4), y: y - 6, vx: 0, vy: 0, life: 0.5, size: 4, grow: 12, color: '#e0e0e0', alpha: 0.8 });
     ctx.save();
@@ -438,12 +438,43 @@ export function createRenderer(canvas) {
       if (type === 'slime') ctx.scale(1 + bounce * 0.03, 1 - bounce * 0.03);
       if (ready(sheet)) { ctx.drawImage(sheet, frame * 24, 0, 24, 24, -S / 2, -S * 0.68, S, S); if (fl) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.85; ctx.drawImage(whiteOf(sheet), frame * 24, 0, 24, 24, -S / 2, -S * 0.68, S, S); } }
       ctx.restore();
+      if (sg) drawGuard(x, y, E.r, face, sg, now);
       statusFx(x, y, st, now, dt);
       if (hp < mh && !spawning) {
         const w = Math.max(24, E.r * 2.2), k = clamp(hp / mh, 0, 1);
         ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(x - w / 2 - 1, y - S * 0.68 - 6, w + 2, 5);
         ctx.fillStyle = '#ef5350'; ctx.fillRect(x - w / 2, y - S * 0.68 - 5, w * k, 3);
       }
+    }
+    ctx.restore();
+  }
+
+  // 방패병: 1 방패 들고 전진, 2 돌진 준비, 3 돌진, 4 방패 내림(빈틈)
+  function drawGuard(x, y, r, face, sg, now) {
+    const cy = y - r * 0.5;
+    ctx.save();
+    if (sg === 4) {
+      for (let i = 0; i < 3; i++) {
+        const a = now / 180 + (i * TAU) / 3;
+        ctx.fillStyle = '#ffeb3b'; ctx.globalAlpha = 0.9;
+        ctx.fillRect(x + Math.cos(a) * 11 - 2, y - r * 2.1 + Math.sin(a) * 4 - 2, 4, 4);
+      }
+      ctx.restore(); return;
+    }
+    const ARC = 1.0, R = r + 9;
+    if (sg === 2) {
+      const k = 0.5 + 0.5 * Math.sin(now / 40);
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.25 + 0.35 * k;
+      const gr = ctx.createRadialGradient(x, cy, 0, x, cy, r * 2.4); gr.addColorStop(0, '#ff5252'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, cy, r * 2.4, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    if (sg === 3 && Math.random() < 0.9) P.add({ kind: 'smoke', x: x - Math.cos(face) * r + rnd(-5, 5), y: y + r * 0.6 + rnd(-3, 3), vx: -Math.cos(face) * 60, vy: -Math.sin(face) * 60, life: 0.35, size: 4, grow: 10, color: '#d7ccc8', alpha: 0.7 });
+    ctx.globalAlpha = sg === 3 ? 1 : 0.85;
+    ctx.lineCap = 'round';
+    for (const [w, c] of [[8, 'rgba(0,0,0,.55)'], [5, sg === 1 ? '#90a4ae' : '#ff8a80'], [2, '#eceff1']]) {
+      ctx.strokeStyle = c; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.arc(x, cy, R, face - ARC * 0.75, face + ARC * 0.75); ctx.stroke();
     }
     ctx.restore();
   }
@@ -656,7 +687,7 @@ export function createRenderer(canvas) {
       label(snap.msg, VIEW_W / 2, y, '#ffffff', 24);
     }
     if (meH && !meH.al && !meH.out && meH.sk > 0) label(`다시 등장까지 ${Math.ceil(meH.rs)}초`, VIEW_W / 2, VIEW_H / 2, '#ffffff', 28);
-    if (meH?.out) label('탈락 — 다음 스테이지에서 돌아와요', VIEW_W / 2, VIEW_H / 2, '#cfd8dc', 22);
+    if (meH?.out) label(snap.m === 'colosseum' ? '탈락 — 목숨을 모두 잃었어요. 관전 중' : '탈락 — 다음 스테이지에서 돌아와요', VIEW_W / 2, VIEW_H / 2, '#cfd8dc', 22);
     if (snap.col?.over) {
       ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, VIEW_H / 2 - 60, VIEW_W, 100);
       label('승리!', VIEW_W / 2, VIEW_H / 2 - 8, '#ffd54f', 52);

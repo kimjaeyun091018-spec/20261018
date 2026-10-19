@@ -241,7 +241,10 @@ export const ENEMIES = {
   caster: { name: '해골 마법사', hp: 38, r: 12, speed: 75, weight: 0.9, ai: 'caster', fire: { every: 2.6, speed: 200, dmg: 9, look: 'eorb', count: 3, home: 1.6 }, gold: 4, xp: 11 },
   spider: { name: '거미', hp: 32, r: 11, speed: 80, weight: 0.85, touch: 10, kb: [150, 220], ai: 'leap', gold: 2, xp: 7 },
   brute: { name: '오크 브루트', hp: 110, r: 18, speed: 70, weight: 1.6, touch: 14, kb: [200, 300], ai: 'slam', slam: { r: 90, dmg: 20, kb: [200, 280], warn: 0.8, every: 3.2 }, gold: 8, xp: 19 },
-  shield: { name: '방패병', hp: 90, r: 16, speed: 60, weight: 1.5, touch: 12, kb: [160, 240], ai: 'shield', gold: 6, xp: 15 },
+  // 방패를 든 동안: 정면 투사체 무효, 정면 근접 피해·넉백 경감. 돌진 후엔 방패가 내려가 빈틈이 생김
+  shield: { name: '방패병', hp: 90, r: 16, speed: 60, weight: 1.5, touch: 12, kb: [160, 240], ai: 'shield', gold: 6, xp: 15,
+    guard: 0.45, arc: 1.15,
+    charge: { every: [3.2, 4.6], range: [70, 360], warn: 0.65, time: 0.6, speed: 420, dmg: 16, kb: [250, 330], stagger: 1.3, wallStagger: 2.2 } },
   totem: { name: '저주 토템', hp: 70, r: 14, speed: 0, weight: 99, ai: 'totem', fire: { every: 0.5, speed: 190, dmg: 8, look: 'eorb' }, gold: 5, xp: 13 },
 };
 // 보스 (assets/bosses.png 40x40: [1, 2, 쓰러짐] × 3)

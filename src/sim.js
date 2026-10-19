@@ -182,6 +182,8 @@ function hit(s, t, opt) {
   }
   if (t.kind === 'hero' && story) dmg *= 1 - t.b.armor;
   if (t.st.frozen > 0 && !opt.dot) dmg *= 1.15;
+  const guarded = !opt.dot && t.ai === 'shield' && shieldFront(t, opt.ux, opt.uy);
+  if (guarded) { dmg *= ENEMIES.shield.guard; fxPush(s, { k: 'block', x: t.x + Math.cos(t.face) * 16, y: t.y + Math.sin(t.face) * 16, t: 0.3 }); }
   dmg = Math.max(1, Math.round(dmg));
   // 피해 → %
   if (t.kind === 'hero') {
@@ -205,6 +207,7 @@ function hit(s, t, opt) {
     if (t.kind === 'hero' && story) speed *= 1 - t.b.armor;
     if (t.buf?.aegis > 0) speed *= 0.15;
     if (t.boss) speed *= 0.25;
+    if (guarded) speed *= ENEMIES.shield.guard;
     const l = len(opt.ux, opt.uy);
     const ux = opt.ux / l, uy = opt.uy / l;
     t.kvx = ux * speed; t.kvy = uy * speed;
@@ -399,6 +402,9 @@ function updateStatus(s, u, dt) {
   }
 }
 const frozenOrStunned = (u) => u.stun > 0 || u.st.frozen > 0;
+// 방패병이 방패를 들고 있는가 (돌진 후 비틀거림·기절·빙결 중엔 내려감)
+const shieldUp = (e) => e.ai === 'shield' && e.mode !== 3 && !frozenOrStunned(e) && !e.spawning && !e.fall;
+const shieldFront = (e, ux, uy) => shieldUp(e) && (ux || uy) && angDiff(Math.atan2(-uy, -ux), e.face) < ENEMIES.shield.arc;
 const speedMul = (u) => (u.st.chill ? 1 - STATUS.chill.slow : 1) * (u.slowT > 0 ? 0.6 : 1) * (u.st.frozen > 0 ? 0 : 1);
 
 // ============================================================
@@ -591,7 +597,7 @@ function updateShots(s, dt) {
       if (Math.hypot(t.x - p.x, t.y - p.y) > p.r + t.r) continue;
       const last = p.hits.get(t.id);
       if (last !== undefined && (!p.hitEvery || s.time - last < p.hitEvery)) continue;
-      if (t.ai === 'shield' && angDiff(Math.atan2(-p.vy, -p.vx), t.face) < 1.0 && !p.pull) {
+      if (t.ai === 'shield' && !p.pull && shieldFront(t, p.vx, p.vy)) {
         p.life = 0; fxPush(s, { k: 'block', x: t.x + Math.cos(t.face) * 16, y: t.y + Math.sin(t.face) * 16, t: 0.3 }); break;
       }
       p.hits.set(t.id, s.time);
@@ -856,8 +862,8 @@ function heroFell(s, h) {
   if (by && by !== h) by.kos++;
   fxPush(s, { k: 'ko', x: h.x, y: h.y, color: h.color, t: 1.2, shake: 14 });
   if (s.mode === 'colosseum') {
-    h.respawn = COLOSSEUM.respawn;
-    say(s, `${h.name} 링아웃! (남은 목숨 ${h.stocks})`, 1.8);
+    if (h.stocks > 0) { h.respawn = COLOSSEUM.respawn; say(s, `${h.name} 링아웃! (남은 목숨 ${h.stocks})`, 1.8); }
+    else { h.stocks = 0; h.out = true; say(s, `${h.name} 탈락!`, 1.8); }
     const teamsAlive = new Set(heroList(s).filter((o) => o.stocks > 0).map((o) => o.team));
     if (teamsAlive.size <= 1) {
       const win = [...teamsAlive][0];
@@ -1078,6 +1084,32 @@ function contact(s, e, t, dmg, kb) {
   hit(s, t, { dmg: dmg * e.dmgMul, kb, ux: t.x - e.x, uy: t.y - e.y, src: e });
   e.cd = 1;
 }
+function shieldCharge(s, e, E, dt) {
+  const C = E.charge;
+  e.modeT -= dt;
+  if (e.mode === 3) { // 돌진 후 비틀거림: 방패가 내려가 무방비
+    if (e.modeT <= 0) { e.mode = 0; e.modeT = rnd(C.every[0], C.every[1]); }
+    moveBody(s, e, 0, 0, dt);
+    return;
+  }
+  const cx = Math.cos(e.ca), cy = Math.sin(e.ca);
+  e.face = e.ca;
+  const x0 = e.x, y0 = e.y;
+  moveBody(s, e, cx * C.speed * speedMul(e), cy * C.speed * speedMul(e), dt);
+  for (const u of heroList(s).filter(isUnit)) {
+    if (e.hitSet.includes(u.id) || dist(u, e) > e.r + u.r + 6 || u.inv > 0) continue;
+    e.hitSet.push(u.id);
+    // 돌진 방향 + 옆으로 살짝 밀어냄
+    const sx = u.x - e.x, sy = u.y - e.y, side = (sx * -cy + sy * cx) >= 0 ? 1 : -1;
+    hit(s, u, { dmg: C.dmg * e.dmgMul, kb: C.kb, ux: cx - cy * side * 0.35, uy: cy + cx * side * 0.35, src: e });
+  }
+  const moved = Math.hypot(e.x - x0, e.y - y0);
+  const bonk = e.modeT < C.time - 0.08 && moved < C.speed * dt * 0.3;
+  if (bonk || e.modeT <= 0 || frozenOrStunned(e)) {
+    e.mode = 3; e.modeT = bonk ? C.wallStagger : C.stagger;
+    if (bonk) { fxPush(s, { k: 'wallhit', x: e.x + cx * e.r, y: e.y + cy * e.r, t: 0.4, shake: 5 }); e.stun = Math.max(e.stun, 0.6); }
+  }
+}
 function updateEnemy(s, e, dt) {
   e.flash = Math.max(0, e.flash - dt);
   e.inv = Math.max(0, e.inv - dt);
@@ -1091,6 +1123,8 @@ function updateEnemy(s, e, dt) {
   e.t += dt;
   if (e.ai === 'boss') { updateBoss(s, e, dt); return; }
   const E = ENEMIES[e.type];
+  if (e.ai === 'shield' && (e.mode === 2 || e.mode === 3)) { shieldCharge(s, e, E, dt); return; }
+  if (e.ai === 'shield' && e.mode === 1 && frozenOrStunned(e)) e.mode = 0; // 자세가 끊기면 취소
   const t = nearestHero(s, e);
   let wx = 0, wy = 0;
   if (t && !frozenOrStunned(e)) {
@@ -1143,10 +1177,22 @@ function updateEnemy(s, e, dt) {
           if (d < 110 && e.modeT <= 0) { e.modeT = E.slam.every; e.slamT = E.slam.warn; fxPush(s, { k: 'warn', x: e.x, y: e.y, r: E.slam.r, t: E.slam.warn }); }
         }
         break;
-      case 'shield':
-        wx = ux * sp; wy = uy * sp;
-        contact(s, e, t, E.touch, E.kb);
+      case 'shield': {
+        const C = E.charge;
+        e.modeT -= dt;
+        if (e.mode === 0) { // 방패 들고 전진
+          wx = ux * sp; wy = uy * sp;
+          contact(s, e, t, E.touch, E.kb);
+          if (e.modeT <= 0 && d > C.range[0] && d < C.range[1]) {
+            e.mode = 1; e.modeT = C.warn; e.ca = e.face; e.hitSet = [];
+            fxPush(s, { k: 'warnline', x: e.x, y: e.y, a: e.ca, len: C.speed * C.time + 20, w: e.r * 2, t: C.warn });
+          }
+        } else if (e.mode === 1) { // 자세 잡기 (조준 고정)
+          e.face = e.ca;
+          if (e.modeT <= 0) { e.mode = 2; e.modeT = C.time; fxPush(s, { k: 'dashstart', x: e.x, y: e.y, a: e.ca, t: 0.3 }); }
+        }
         break;
+      }
       case 'totem':
         if (e.cd <= 0) { e.cd = E.fire.every; e.spin = (e.spin || 0) + 0.5; for (let k = 0; k < 3; k++) enemyShot(s, e, e.spin + (k * Math.PI * 2) / 3, E.fire); }
         break;
@@ -1439,7 +1485,7 @@ export function snapshot(s) {
       ln: Math.hypot(h.kvx, h.kvy) > 380 ? 1 : 0, ob: s.mode === 'story' ? h.b.orbs : 0, sz: r1(h.b.size || 0),
       bf: Object.keys(h.buf).join(','), au: h.augs, cho: h.choice ? { o: h.choice.opts, tier: h.choice.tier, t: Math.ceil(h.choice.t) } : null,
     })),
-    e: s.enemies.map((e) => [e.id, e.type, r1(e.x), r1(e.y), Math.ceil(e.hp), e.maxHp, r1(e.fall), e.flash > 0 ? 1 : 0, r1(e.face), stCode(e), e.spawning ? 1 : 0, r1(e.z || 0), e.boss ? 1 : 0, e.act ? e.act.type : 0, e.act?.a !== undefined ? r1(e.act.a) : 0, Math.hypot(e.kvx, e.kvy) > 380 ? 1 : 0]),
+    e: s.enemies.map((e) => [e.id, e.type, r1(e.x), r1(e.y), Math.ceil(e.hp), e.maxHp, r1(e.fall), e.flash > 0 ? 1 : 0, r1(e.face), stCode(e), e.spawning ? 1 : 0, r1(e.z || 0), e.boss ? 1 : 0, e.act ? e.act.type : 0, e.act?.a !== undefined ? r1(e.act.a) : 0, Math.hypot(e.kvx, e.kvy) > 380 ? 1 : 0, e.ai === 'shield' ? (shieldUp(e) ? e.mode + 1 : 4) : 0]),
     s: s.shots.map((p) => [p.id, p.look, r1(p.x), r1(p.y), r1(Math.atan2(p.vy, p.vx)), p.r, p.el || 0, r1(p.z || 0), p.team === 'E' ? 1 : 0]),
     z: s.zones.map((z) => [z.id, z.look, r1(z.x), r1(z.y), z.r, r1(z.t), r1(z.life)]),
     hz: s.hazards.map((z) => [r1(z.x), r1(z.y), z.r, r1(z.t)]),
