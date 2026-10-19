@@ -709,6 +709,8 @@ HEROES['miko'] = dict(
     ], pivot=(3, 2)),
     kind='staff', legs=('p', 'o', 'O'), arm='a', glove='a',
     ang=dict(rest=-60, windup=-120, strike=-10, follow=-35, hurt=-40, win=-100),
+    sprite=dict(file='tools/art/miko.png', cell=104, scale=0.78, weapon_from=(60, 26), pivot=(58, 56), legs=(80, 37), face=(32, 18, 32),
+                ang=dict(rest=0, windup=-14, strike=10, follow=5, hurt=10, win=-15), push=dict(windup=-1, strike=2, follow=1)),
 )
 
 # =====================================================================

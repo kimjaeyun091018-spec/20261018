@@ -227,6 +227,7 @@ export const HERO_SPRITE = { size: 48, draw: 72, frames: 16, portrait: 64 };
 export const HERO_SHEETS = {
   archer: { file: 'hero_archer.png', cell: 72, scale: 1.0 },
   mage: { file: 'hero_mage.png', cell: 104, scale: 0.78 },
+  miko: { file: 'hero_miko.png', cell: 104, scale: 0.78 },
   reaper: { file: 'hero_reaper.png', cell: 128, scale: 0.72 },
 };
 
