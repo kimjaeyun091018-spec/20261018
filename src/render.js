@@ -1009,16 +1009,6 @@ export function createRenderer(canvas) {
       L.g.fillStyle = foe ? 'rgba(255,40,40,.72)' : 'rgba(40,140,255,.72)'; L.g.fillRect(0, 0, L.c.width, L.c.height);
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(L.c, 0, 0); ctx.restore();
     }
-    ctx.save();
-    for (const sh of snap.s) {
-      const [, look, x, y, , r, , zz = 0, , tm] = sh;
-      const foe = tm !== undefined ? tm !== myTeam : !!sh[8];
-      const R = Math.min(48, r + 6), yy = y - zz;
-      const col = foe ? '255,45,45' : '61,155,255';
-      ctx.strokeStyle = `rgba(${col},.3)`; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(x, yy, R, 0, TAU); ctx.stroke();
-      ctx.strokeStyle = `rgba(${col},.95)`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, yy, R, 0, TAU); ctx.stroke();
-    }
-    ctx.restore();
     for (const f of fxList) if (!groundFx.has(f.k) && f.k !== 'pillar') drawFx(ctx, f, now);
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; P.draw(ctx, 'add'); ctx.restore();
     for (const t of texts) {
