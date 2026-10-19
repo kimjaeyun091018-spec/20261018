@@ -772,6 +772,17 @@ function updateZones(s, dt) {
 // ============================================================
 //  영웅 한 틱
 // ============================================================
+// 빛의 문: 영웅들이 빛에 감싸여 문 안으로 빨려 들어감 (점점 빨라지며 작아짐)
+function pullIntoPortal(s, h, dt) {
+  const P = s.story.portal, k = Math.min(1, s.story.warpT / WARP_T);
+  const tx = P.x, ty = P.y - 46;
+  const dx = tx - h.x, dy = ty - h.y, d = Math.hypot(dx, dy);
+  const sp = (120 + 900 * k * k) * dt;
+  if (d > 1) { const m = Math.min(d, sp); h.x += (dx / d) * m; h.y += (dy / d) * m; }
+  h.kvx = h.kvy = 0; h.dash = h.roll = h.chan = h.snipe = null; h.inv = 1;
+  h.warp = k;
+  h.moving = false;
+}
 function updateHero(s, h, inp, dt) {
   h.cds = h.cds.map((c) => Math.max(0, c - dt));
   h.inv = Math.max(0, h.inv - dt);
@@ -800,6 +811,7 @@ function updateHero(s, h, inp, dt) {
     return;
   }
   if (h.fall > 0) { h.fall -= dt; if (h.fall <= 0) heroFell(s, h); return; }
+  if (s.story?.phase === 'warp' && s.story.portal) { pullIntoPortal(s, h, dt); return; }
   updateStatus(s, h, dt);
   if (!isUnit(h)) return;
   pickupItems(s, h);
@@ -1640,6 +1652,8 @@ function spawnWave(s) {
     fxPush(s, { k: 'spawnwarn', x: p.x, y: p.y, t: 0.55 + i * 0.12 });
   });
 }
+// 빛의 문으로 빨려 들어가는 시간
+const WARP_T = 1.3;
 function nextStage(s) {
   const S = s.story;
   if (S.st + 1 < STAGES_PER_CHAPTER) startStage(s, S.ch, S.st + 1);
@@ -1704,11 +1718,14 @@ function updateStory(s, dt) {
     }
     if (P.open) {
       const h = heroes.find((u) => isUnit(u) && Math.abs(u.x - P.x) < 26 && u.y > P.y - 26 && u.y < P.y + 12);
-      if (h) { S.phase = 'warp'; S.t = 0.8; fxPush(s, { k: 'warp', x: P.x, y: P.y, who: h.id, t: 0.9 }); }
+      if (h) { S.phase = 'warp'; S.t = WARP_T; S.warpT = 0; fxPush(s, { k: 'warp', x: P.x, y: P.y, who: h.id, t: WARP_T }); }
     }
     return;
   }
-  if (S.phase === 'warp' && S.t <= 0) nextStage(s);
+  if (S.phase === 'warp') {
+    S.warpT += dt;
+    if (S.t <= 0) { fxPush(s, { k: 'warpend', x: S.portal.x, y: S.portal.y, t: 0.6 }); nextStage(s); }
+  }
 }
 
 // ============================================================
@@ -1819,7 +1836,7 @@ export function snapshot(s) {
       ch: h.chan ? 1 : 0, ds: h.dash ? (h.dash.S.look || 1) : 0, ro: h.roll ? 1 : 0, sp: h.snipe ? 1 : 0, em: h.empower > 0 ? 1 : 0, st: stCode(h),
       cd: h.cds.map(r1), cm: [0, 1, 2, 3].map((i) => r1(cdOf(s, h, i))), dc: h.dashCh, dm: h.dashMax, cb: h.combo.n, mc: h.maxCombo, ko: h.kos, rs: r1(Math.max(0, h.respawn)), bot: h.bot ? 1 : 0,
       ln: Math.hypot(h.kvx, h.kvy) > 380 ? 1 : 0, ob: s.mode === 'story' ? h.b.orbs : 0, sz: r1(h.b.size || 0),
-      lv: h.lv, sh: h.shieldMax ? [Math.ceil(h.shield), h.shieldMax] : 0, lp: h.dash?.leap ? 1 : 0,
+      lv: h.lv, sh: h.shieldMax ? [Math.ceil(h.shield), h.shieldMax] : 0, lp: h.dash?.leap ? 1 : 0, wp: s.story?.phase === 'warp' ? r1(h.warp || 0) : 0,
       bf: Object.keys(h.buf).join(','), au: h.augs, cho: h.choice ? { o: h.choice.opts, tier: h.choice.tier, t: Math.ceil(h.choice.t) } : null,
     })),
     e: s.enemies.map((e) => [e.id, e.type, r1(e.x), r1(e.y), Math.ceil(e.hp), e.maxHp, r1(e.fall), e.flash > 0 ? 1 : 0, r1(e.face), stCode(e), e.spawning ? 1 : 0, r1(e.z || 0), e.boss ? 1 : 0, e.act ? e.act.type : 0, e.act?.a !== undefined ? r1(e.act.a) : 0, Math.hypot(e.kvx, e.kvy) > 380 ? 1 : 0, e.ai === 'shield' ? (shieldUp(e) ? e.mode + 1 : 4) : 0, r1(e.r), e.z2 ? r1(e.z2) : 0]),

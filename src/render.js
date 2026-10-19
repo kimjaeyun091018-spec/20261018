@@ -234,7 +234,8 @@ export function createRenderer(canvas) {
         case 'shieldbreak': P.burst(f.x, f.y - 12, 22, { kind: 'spark', color: ['#80d8ff', '#e1f5fe', '#ffffff'], sp: [120, 340], life: [0.25, 0.5], size: [2, 4] }); ui.say(f.x, f.y - 40, '방어막 파괴!', '#80d8ff', 15); break;
         case 'portalrise': portalFx.rise = performance.now(); P.burst(f.x, f.y, 30, { kind: 'smoke', color: ['#bcaaa4', '#8d6e63'], sp: [60, 220], life: [0.6, 1.2], size: [5, 10], grow: 14 }); P.burst(f.x, f.y, 26, { kind: 'rock', color: ['#795548', '#5d4037'], sp: [120, 300], life: [0.6, 1], size: [3, 6], grav: 700, a: -Math.PI / 2, spread: 1.2 }); break;
         case 'portalopen': flash = 0.35; flashCol = '#fff8e1'; banners.push({ text: '빛의 문', sub: '문이 열렸다! 안으로 들어가세요', color: '#ffe082', t: 1.3, max: 1.3 }); P.burst(f.x, f.y - 60, 60, { kind: 'glow', color: ['#fffde7', '#ffe082', '#80d8ff'], sp: [80, 380], life: [0.6, 1.3], size: [2, 5] }); break;
-        case 'warp': flash = 0.6; flashCol = '#ffffff'; P.burst(f.x, f.y - 40, 80, { kind: 'glow', color: ['#ffffff', '#ffe082', '#b3e5fc'], sp: [100, 500], life: [0.5, 1], size: [2, 5] }); break;
+        case 'warp': flash = 0.15; flashCol = '#fff8e1'; P.burst(f.x, f.y - 50, 40, { kind: 'glow', color: ['#ffffff', '#ffe082', '#b3e5fc'], sp: [80, 300], life: [0.4, 0.8], size: [2, 4] }); break;
+        case 'warpend': flash = 0.7; flashCol = '#ffffff'; P.burst(f.x, f.y - 50, 90, { kind: 'glow', color: ['#ffffff', '#ffe082', '#b3e5fc'], sp: [120, 560], life: [0.5, 1], size: [2, 5] }); break;
         default:
       }
       hooks.onFx?.(f, myId);
@@ -361,6 +362,7 @@ export function createRenderer(canvas) {
     let lift = 0;
     const A = anim.get(h.id);
     if ((h.ds === 'leap' || h.lp) && A) { const k = clamp((now - A.t) / 300, 0, 1); lift = Math.sin(k * Math.PI) * 60; }
+    if (h.wp > 0) { drawWarping(h, x, y, sc, now); return; }
     if ((h.ds || h.ro) && Math.random() < 0.7) ghosts.push({ h: { ...h }, frame: heroFrame(h, now), x, y, lift, life: 0.22, max: 0.22, sc });
     // 날아가는 중: 연기 꼬리
     if (h.ln && Math.random() < 0.9) { P.add({ kind: 'smoke', x: x + rnd(-4, 4), y: y - 10 + rnd(-4, 4), vx: rnd(-10, 10), vy: rnd(-10, 10), life: 0.6, size: 5, grow: 14, color: '#eceff1', alpha: 0.9 }); }
@@ -530,6 +532,35 @@ export function createRenderer(canvas) {
     if (thr) ctx.rotate(-0.15);
     if (ready(SHEETS.enemies)) ctx.drawImage(SHEETS.enemies, (idx * 3 + (Math.floor(now / 260 + id) % 2)) * 24, 0, 24, 24, -S / 2, -S * 0.8, S, S);
     ctx.restore();
+  }
+
+  // 빛의 문으로 빨려 들어가는 영웅: 빛에 감싸여 작아지며 하얗게
+  function drawWarping(h, x, y, sc, now) {
+    const k = clamp(h.wp, 0, 1);
+    const s2 = sc * (1 - 0.8 * k);
+    const cy = y - 14 * s2;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const R = 26 + 30 * k;
+    const gr = ctx.createRadialGradient(x, cy, 0, x, cy, R);
+    gr.addColorStop(0, `rgba(255,255,255,${0.55 + 0.4 * k})`); gr.addColorStop(0.45, `rgba(255,236,179,${0.35 + 0.3 * k})`); gr.addColorStop(1, 'rgba(128,216,255,0)');
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, cy, R, 0, TAU); ctx.fill();
+    // 몸을 감는 빛의 띠
+    for (let i = 0; i < 3; i++) {
+      const a = now / 140 + i * 2.1;
+      ctx.strokeStyle = `rgba(255,248,225,${0.5 + 0.4 * k})`; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.ellipse(x, cy, (22 - 10 * k) * (1 + 0.2 * i), (8 - 3 * k), a * 0.2, a, a + 2.4); ctx.stroke();
+    }
+    ctx.restore();
+    const frame = heroFrame(h, now);
+    drawHeroSprite(h, frame, x, y, 1 - 0.6 * k, false, 0, s2);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    drawHeroSprite(h, frame, x, y, Math.min(1, 0.3 + k), true, 0, s2);
+    ctx.restore();
+    // 주위의 빛 알갱이가 소용돌이치며 빨려 들어감
+    for (let i = 0; i < 3; i++) {
+      const a = Math.random() * TAU, r = rnd(40, 70);
+      P.add({ kind: 'glow', x: x + Math.cos(a) * r, y: cy + Math.sin(a) * r * 0.7, vx: -Math.cos(a + 0.9) * r * 3, vy: -Math.sin(a + 0.9) * r * 2.1, life: 0.32, size: rnd(1.5, 3), color: Math.random() < 0.5 ? '#fff8e1' : '#b3e5fc', drag: 0 });
+    }
   }
 
   // ---------- 빛의 문: 바닥에서 솟아오르는 거대한 석문 ----------
@@ -943,7 +974,7 @@ export function createRenderer(canvas) {
     for (const f of fxList) if (groundFx.has(f.k)) drawFx(ctx, f, now);
     const bodies = [];
     for (const e of snap.e) bodies.push({ y: e[3], d: () => drawEnemy(e, now, dt) });
-    for (const h of snap.h) bodies.push({ y: h.y, d: () => drawHero(h, me, snap, now, dt) });
+    for (const h of snap.h) bodies.push({ y: h.wp > 0 ? 1e6 : h.y, d: () => drawHero(h, me, snap, now, dt) }); // 빨려 들어가는 영웅은 문 앞에 그림
     for (const it of snap.it || []) bodies.push({ y: it[3], d: () => drawItem(it, now) });
     for (const a of snap.al || []) bodies.push({ y: a[2], d: () => drawAlly(a, now) });
     if (snap.sto?.chest) bodies.push({ y: snap.sto.chest.y, d: () => drawChest(snap.sto.chest, now) });
