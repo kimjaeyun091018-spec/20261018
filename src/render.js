@@ -1,7 +1,7 @@
 // ============================================================
 //  원소 아레나 — 화면 그리기 (공허 · 지도 · 캐릭터 · 적 · 아이템 · HUD)
 // ============================================================
-import { TILE, COLS, ROWS, VIEW_W, VIEW_H, CHARS, CHAR_KEYS, ENEMIES, ENEMY_SHEET, BOSSES, CHAPTERS, COLOSSEUM, ITEMS, AUGMENTS, HERO_SPRITE } from './data.js';
+import { TILE, COLS, ROWS, VIEW_W, VIEW_H, CHARS, CHAR_KEYS, ENEMIES, ENEMY_SHEET, BOSSES, CHAPTERS, COLOSSEUM, ITEMS, AUGMENTS, HERO_SPRITE, HERO_SHEETS } from './data.js';
 import { mapRowsFor, ringOf } from './sim.js';
 import { Particles, drawShot, drawZone, drawFx, spawnFx, elColor } from './fx.js';
 
@@ -11,6 +11,7 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 const V = window.__ASSET_V || 1;
 const img = (src) => { const i = new Image(); i.src = `assets/${src}?v=${V}`; return i; };
 const SHEETS = { heroes: img('heroes.png'), enemies: img('enemies.png'), bosses: img('bosses.png'), busts: img('portraits.png') };
+const OWN = Object.fromEntries(Object.entries(HERO_SHEETS).map(([k, v]) => [k, { ...v, img: img(v.file) }]));
 const ready = (i) => i.complete && i.naturalWidth > 0;
 const FONT = '"Black Han Sans", "Noto Sans KR", sans-serif';
 const HS = HERO_SPRITE.size, HD = HERO_SPRITE.draw, PS = HERO_SPRITE.portrait;
@@ -295,7 +296,11 @@ export function createRenderer(canvas) {
     ctx.translate(x, y - lift);
     if (flip) ctx.scale(-1, 1);
     if (scale !== 1) ctx.scale(scale, scale);
-    if (ready(sheet)) ctx.drawImage(white ? whiteOf(sheet) : sheet, frame * HS, C.row * HS, HS, HS, -HD / 2, -HD * 0.792, HD, HD);
+    const own = OWN[h.c];
+    if (own && ready(own.img)) {
+      const D = own.cell * own.scale;
+      ctx.drawImage(white ? whiteOf(own.img) : own.img, frame * own.cell, 0, own.cell, own.cell, -D / 2, -(own.cell - 2) * own.scale + 12, D, D);
+    } else if (ready(sheet)) ctx.drawImage(white ? whiteOf(sheet) : sheet, frame * HS, C.row * HS, HS, HS, -HD / 2, -HD * 0.792, HD, HD);
     else { ctx.fillStyle = C.color; ctx.fillRect(-10, -26, 20, 30); }
     ctx.restore();
   }

@@ -223,6 +223,11 @@ export const CHAR_KEYS = Object.keys(CHARS);
 //  0-3 서기 · 4-9 걷기 · 10 준비 · 11 공격 · 12 마무리 · 13 맞음 · 14 쓰러짐 · 15 승리
 // assets/portraits.png 한 칸 64x64 (캐릭터 순서대로 가로)
 export const HERO_SPRITE = { size: 48, draw: 72, frames: 16, portrait: 64 };
+// 직접 그려 온 촘촘한 도트는 영웅마다 따로 (한 줄 16칸, 칸 크기 cell, 화면 배율 scale). 발끝은 칸 아래에서 2칸 위
+export const HERO_SHEETS = {
+  archer: { file: 'hero_archer.png', cell: 72, scale: 1.0 },
+  mage: { file: 'hero_mage.png', cell: 80, scale: 1.0 },
+};
 
 // ---------- 적 (assets/enemies.png 24x24: 종류마다 [걷기1, 걷기2, 쓰러짐]) ----------
 export const ENEMY_SHEET = ['slime', 'archer', 'brute', 'bat', 'spider', 'bomber', 'caster', 'shield', 'totem'];

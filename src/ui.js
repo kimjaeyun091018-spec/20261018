@@ -1,5 +1,5 @@
 // 메뉴 화면들 (DOM)
-import { CHARS, CHAR_KEYS, ELEMENTS, TREE, CHAPTERS, REACTIONS, HERO_SPRITE, AUGMENTS, ITEMS } from './data.js';
+import { CHARS, CHAR_KEYS, ELEMENTS, TREE, CHAPTERS, REACTIONS, HERO_SPRITE, HERO_SHEETS, AUGMENTS, ITEMS } from './data.js';
 import { COLOSSEUM_ARENAS } from './maps.js';
 import * as SV from './save.js';
 import { sfx } from './audio.js';
@@ -12,6 +12,7 @@ heroes.src = `assets/heroes.png?v=${V}`;
 const busts = new Image();
 busts.src = `assets/portraits.png?v=${V}`;
 const HS = HERO_SPRITE.size;
+const OWN = Object.fromEntries(Object.entries(HERO_SHEETS).map(([k, v]) => { const i = new Image(); i.src = `assets/${v.file}?v=${V}`; return [k, { ...v, img: i }]; }));
 
 // 캐릭터 초상 (움직이는 작은 캔버스)
 const portraits = new Set();
@@ -45,7 +46,13 @@ function animPortraits(t) {
       const on = c.closest('.on');
       const cyc = Math.floor(t / 140) % 14;
       const f = on && cyc >= 10 ? 10 + Math.min(2, cyc - 10) : Math.floor(t / 230) % 4;
-      if (heroes.complete) g.drawImage(heroes, f * HS, C.row * HS, HS, HS, 0, 0, c.width, c.height);
+      const own = OWN[c.dataset.char];
+      if (own && own.img.complete && own.img.naturalWidth) {
+        // 발끝 기준으로 맞춰서 기본 영웅과 같은 크기로 보이게
+        const k = (c.width / HS) * (own.scale / HERO_SPRITE.draw * HS);
+        const D = own.cell * k;
+        g.drawImage(own.img, f * own.cell, 0, own.cell, own.cell, (c.width - D) / 2, c.height * (46 / 48) - (own.cell - 2) * k, D, D);
+      } else if (heroes.complete) g.drawImage(heroes, f * HS, C.row * HS, HS, HS, 0, 0, c.width, c.height);
     }
     if (locked) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(10,8,20,.55)'; g.fillRect(0, 0, c.width, c.height); g.globalCompositeOperation = 'source-over'; }
   }

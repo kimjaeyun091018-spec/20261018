@@ -177,7 +177,8 @@ HEROES['archer'] = dict(
         '..GG..',
     ], pivot=(5, 6)),
     kind='bow', legs=('p', 'o', 'O'), arm='a', glove='c',
-    sprite=dict(file='tools/art/archer.png', weapon_from=(29, 13), pivot=(31, 27), legs=(34, 20), face=(4, 0, 32),
+    # 촘촘한 도트 그대로 (한 칸 72, 화면에서 1배) — 줄이면 뭉개져서
+    sprite=dict(file='tools/art/archer.png', cell=72, scale=1.0, weapon_from=(44, 16), pivot=(45, 38), legs=(56, 31), face=(14, 0, 32),
                 ang=dict(rest=0, windup=0, strike=0, follow=0, hurt=8, win=-20), push=dict(windup=-1, strike=2, follow=1)),
 )
 
@@ -239,6 +240,8 @@ HEROES['mage'] = dict(
         '...............x...',
     ], pivot=(4, 3)),
     kind='staff', legs=('p', 'o', 'O'), arm='a', glove='c', behind=False,
+    sprite=dict(file='tools/art/mage.png', cell=80, scale=1.0, weapon_from=(50, 15), pivot=(50, 46), legs=(65, 34), face=(18, 8, 32),
+                ang=dict(rest=0, windup=-12, strike=8, follow=4, hurt=10, win=-15), push=dict(windup=-1, strike=2, follow=1)),
 )
 
 # =====================================================================

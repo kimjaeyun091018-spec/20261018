@@ -315,13 +315,14 @@ def sprite_frames(key):
             else:
                 bp[x, y] = px[x, y]
     leg_y, leg_split = S['legs']
-    ox, oy = S.get('place', ((FW - w) // 2, FH - 2 - h))
+    CW = S.get('cell', FW)
+    ox, oy = S.get('place', ((CW - w) // 2, CW - 2 - h))
     A = dict(rest=0, windup=-150, strike=-25, follow=25, hurt=12, win=-115)
     A.update(S.get('ang', {}))
     push = S.get('push', {})  # 활 등: 무기를 돌리지 않고 앞뒤로만
 
     def compose(bob=0, lean=0, la=0, lb=0, wa=0, hurt=False, wpush=0):
-        f = Image.new('RGBA', (FW, FH), (0, 0, 0, 0))
+        f = Image.new('RGBA', (CW, CW), (0, 0, 0, 0))
         # 몸: 다리 줄 위만 흔들림
         top = body.crop((0, 0, w, leg_y))
         f.alpha_composite(top, (ox + lean, oy + bob))
@@ -352,7 +353,7 @@ def sprite_frames(key):
             frames.append(compose(lean=-2, bob=1, wa=A['hurt']))
         elif i == 14:
             idle = compose()
-            out = Image.new('RGBA', (FW, FH), (0, 0, 0, 0))
+            out = Image.new('RGBA', (CW, CW), (0, 0, 0, 0))
             out.alpha_composite(idle.rotate(90, resample=Image.NEAREST), (0, 10))
             frames.append(out)
         else:
@@ -374,8 +375,20 @@ def main():
             continue
         if 'sprite' in HEROES[key]:
             frames, port = sprite_frames(key)
-            for i, fr in enumerate(frames):
-                sheet.alpha_composite(fr, (i * FW, r * FH))
+            CW = HEROES[key]['sprite'].get('cell', FW)
+            if CW == FW:
+                for i, fr in enumerate(frames):
+                    sheet.alpha_composite(fr, (i * FW, r * FH))
+            else:
+                # 칸 크기가 다른 영웅은 따로 한 줄짜리 그림 (assets/hero_<이름>.png)
+                own = Image.new('RGBA', (CW * FRAMES, CW), (0, 0, 0, 0))
+                for i, fr in enumerate(frames):
+                    own.alpha_composite(fr, (i * CW, 0))
+                own.save(ROOT / 'assets' / f'hero_{key}.png')
+                # 공용 그림에는 줄인 그림을 비상용으로
+                for i, fr in enumerate(frames):
+                    small = fr.resize((FW, FH), Image.NEAREST)
+                    sheet.alpha_composite(small, (i * FW, r * FH))
             ports.alpha_composite(port, (r * 64, 0))
             continue
         for i in range(FRAMES):
