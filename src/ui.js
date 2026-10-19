@@ -2,6 +2,8 @@
 import { CHARS, CHAR_KEYS, ELEMENTS, TREE, CHAPTERS, REACTIONS, HERO_SPRITE, HERO_SHEETS, AUGMENTS, ITEMS, RARITY, RARITY_ORDER, BOXES, GACHA, HERO_LV, heroStats, STAT_NAMES } from './data.js';
 import { COLOSSEUM_ARENAS } from './maps.js';
 import * as SV from './save.js';
+import * as SIM from './sim.js';
+import { createRenderer } from './render.js';
 import { sfx } from './audio.js';
 
 const $menu = document.getElementById('menu');
@@ -65,7 +67,7 @@ export function hide() { $menu.hidden = true; $menu.innerHTML = ''; }
 function bind(sel, fn) { $menu.querySelectorAll(sel).forEach((el) => el.addEventListener('click', (e) => { sfx('ui'); fn(el, e); })); }
 
 const SKILL_KEYS = ['클릭/J', 'Q/K', 'E/L', 'R/;'];
-const TYPE_NAME = { slash: '근접', shot: '투사체', dashstrike: '돌진', stream: '줄기', blink: '이동', nova: '광역', zone: '지대', line: '연속', snipe: '저격', markall: '표식', detonate: '기폭', strikes: '낙뢰' };
+const TYPE_NAME = { parry: '반격', slash: '근접', shot: '투사체', dashstrike: '돌진', stream: '줄기', blink: '이동', nova: '광역', zone: '지대', line: '연속', snipe: '저격', markall: '표식', detonate: '기폭', strikes: '낙뢰' };
 
 // ---------- 1. 시작 화면: 로고 + "눌러서 시작" ----------
 export function start(h) {
@@ -120,9 +122,9 @@ export function lobby(h) {
           </div>
         </section>
         <section class="modes">
-          <button class="big story" data-go="story"><b>스토리 모드</b><small>스테이지 돌파 · 증강 · 최대 4명 협동</small></button>
+          <button class="big story" data-go="story"><b>스토리 모드</b><small>${SV.getRun() ? `▶ ${SV.getRun().ch + 1}-${SV.getRun().st + 1}부터 이어하기 가능` : '스테이지 돌파 · 증강 · 최대 4명 협동'}</small></button>
           <button class="big colo" data-go="colo"><b>콜로세움</b><small>친구·봇과 대난투식 대전 · 날려서 링아웃</small></button>
-          <button class="big boxbtn" data-go="boxes"><span class="mchest"><i></i></span><span><b>뽑기 상자</b><small>${SV.allOwned() ? '모든 영웅을 모았어요!' : `새 영웅을 뽑아 보세요 · 영웅 ${s.owned.length}/${CHAR_KEYS.length}`}</small></span></button>
+          <button class="big boxbtn" data-go="boxes"><span class="mchest"><i></i></span><span><b>뽑기 상자</b><small>${SV.allOwned() ? '영웅 레벨업 재료 ⚡P.P 모으기' : `새 영웅과 ⚡P.P를 뽑아 보세요 · 영웅 ${s.owned.length}/${CHAR_KEYS.length}`}</small></span></button>
           <div class="rowbtns">
             <button data-go="tree">🌳 스킬 트리</button>
             <button data-go="join">🔗 코드로 참가</button>
@@ -268,8 +270,9 @@ export function chars(h) {
         </div>
       </div>
       ${levelBox(sel, own)}
-      <div class="sklist">${C.skills.map((S, i) => `<div class="skc${i ? '' : ' basic'}"><span class="key">${SKILL_KEYS[i]}</span><b>${S.name}</b>
-        <small>${TYPE_NAME[S.type] || ''}${S.el ? ' · ' + ELEMENTS[S.el].name : ''} · ${S.cd}초</small></div>`).join('')}</div>
+      <div class="sklist">${C.skills.map((S, i) => `<button class="skc${i ? '' : ' basic'}" data-i="${i}"><span class="key">${SKILL_KEYS[i]}</span><b>${S.name}</b>
+        <small>${TYPE_NAME[S.type] || ''}${S.el ? ' · ' + ELEMENTS[S.el].name : ''} · ${S.cd}초</small><span class="play">▶</span></button>`).join('')}</div>
+      <p class="sub tiny center">스킬을 누르면 미리보기 화면이 나와요</p>
       <p class="sub">${C.desc}</p>
       <div class="rowbtns">${own
         ? (sel === s.char ? '<button class="big pick" disabled>사용 중</button>' : '<button class="big pick">이 영웅으로 출전</button>')
@@ -279,10 +282,88 @@ export function chars(h) {
     bind('.pick', () => { SV.setChar(sel); h.onChar?.(sel); draw(sel); });
     bind('.buy', () => { if (!confirm(`${C.name}을(를) ${C.price.toLocaleString()} G로 바로 영입할까요?\n(뽑기 상자로 얻는 편이 훨씬 싸요)`)) return; if (SV.buyChar(sel)) { sfx('buy'); toast(`${C.name} 영입 완료!`); h.onChar?.(sel); } draw(sel); });
     bind('.gobox', () => h.go('boxes'));
+    bind('.skc', (el) => skillDemo(sel, Number(el.dataset.i)));
     bind('.lvup', () => { if (SV.levelUp(sel)) { sfx('buy'); toast(`${C.name} 레벨 ${SV.heroLv(sel)}!`); h.onChar?.(sel); } draw(sel); });
     bind('.back', () => h.back());
   };
   draw();
+}
+
+// ---------- 스킬 미리보기 (클래시로얄 카드 설명처럼 짧은 시범 화면) ----------
+function skillText(S) {
+  const p = [];
+  if (S.desc) p.push(S.desc);
+  if (S.dmg) p.push(`피해 ${S.dmg}${S.count > 1 ? ` × ${S.count}` : ''}`);
+  if (S.chain) p.push(`${S.chain.length}연타 (마지막 일격은 강하게)`);
+  if (S.explode) p.push(`폭발 범위 ${S.explode.r}`);
+  if (S.pierce && S.pierce < 99) p.push(`${S.pierce}명 관통`); else if (S.pierce >= 99) p.push('모두 관통');
+  if (S.r && ['nova', 'zone', 'parry'].includes(S.type)) p.push(`범위 ${S.r}`);
+  if (S.dist) p.push(`거리 ${S.dist}`);
+  if (S.type === 'dashstrike') p.push('건너편에 땅이 있으면 공허를 뛰어넘음');
+  if (S.stun) p.push(`기절 ${S.stun}초`);
+  if (S.slow && S.type !== 'stream') p.push('둔화');
+  if (S.heal) p.push(`초당 % 회복`);
+  if (S.hook) p.push('맞은 적을 끌어옴');
+  if (S.pull) p.push('주변 적을 빨아들임');
+  if (S.leech) p.push(`맞힐 때마다 내 % -${S.leech}`);
+  if (S.empower) p.push('다음 기본 공격 강화');
+  if (S.home) p.push('적을 따라감');
+  if (S.time && ['zone', 'stream'].includes(S.type)) p.push(`${S.time}초 지속`);
+  return p.join(' · ');
+}
+let demoRun = 0;
+function skillDemo(char, i) {
+  const C = CHARS[char];
+  document.querySelector('.skdemo')?.remove();
+  const wrap = document.createElement('div');
+  wrap.className = 'skdemo';
+  wrap.innerHTML = `<div class="sdbox" style="--c:${C.color}">
+    <div class="sdhead"><b class="sdname"></b><button class="mini sdx">✕ 닫기</button></div>
+    <div class="sdview"><canvas width="960" height="640"></canvas><span class="sdkey"></span></div>
+    <p class="sddesc"></p>
+    <div class="sdtabs">${C.skills.map((S, k) => `<button data-i="${k}">${SKILL_KEYS[k]}<br><b>${S.name}</b></button>`).join('')}</div>
+  </div>`;
+  $menu.appendChild(wrap);
+  const canvas = wrap.querySelector('canvas');
+  const R = createRenderer(canvas);
+  const state = SIM.createDemo(char);
+  let idx = i, t = 0, last = performance.now(), acc = 0;
+  const run = ++demoRun;
+  const setSkill = (k) => {
+    idx = k; t = 0;
+    const S = C.skills[k];
+    wrap.querySelector('.sdname').textContent = `${S.name}`;
+    wrap.querySelector('.sdkey').textContent = `${SKILL_KEYS[k]} · ${TYPE_NAME[S.type] || ''}${S.el ? ' · ' + ELEMENTS[S.el].name : ''} · 재사용 ${S.cd}초`;
+    wrap.querySelector('.sddesc').textContent = skillText(S);
+    wrap.querySelectorAll('.sdtabs button').forEach((b) => b.classList.toggle('on', Number(b.dataset.i) === k));
+    SIM.demoReset(state, { shots: S.type === 'parry' });
+  };
+  setSkill(i);
+  const CYCLE = 2.8;
+  const frame = (now) => {
+    if (run !== demoRun || !wrap.isConnected) return;
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    acc += dt;
+    while (acc >= 1 / 60) {
+      acc -= 1 / 60; t += 1 / 60;
+      const S = C.skills[idx];
+      const key = ['atk', 's1', 's2', 's3'][idx];
+      const castAt = S.type === 'parry' ? 0.75 : 0.35;
+      const hold = idx === 0 ? t > castAt && t < castAt + 1.3 : t > castAt && t < castAt + 0.1;
+      const inp = { aim: 0, ad: 190, mx: 0, my: 0 };
+      if (hold) inp[key] = true;
+      SIM.step(state, { me: inp }, 1 / 60);
+      const h = state.heroes.me; h.pct = 0; h.inv = 99;
+      if (t >= CYCLE) { t = 0; SIM.demoReset(state, { shots: S.type === 'parry' }); }
+    }
+    R.render(SIM.snapshot(state), 'me', { noHud: true, shakeMul: 0.4 });
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  wrap.querySelectorAll('.sdtabs button').forEach((b) => b.addEventListener('click', () => { sfx('ui'); setSkill(Number(b.dataset.i)); }));
+  const close = () => { demoRun++; wrap.remove(); };
+  wrap.querySelector('.sdx').addEventListener('click', close);
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
 }
 
 // 영웅 레벨: 능력치 표 + P.P 막대 + 레벨업 버튼
@@ -318,9 +399,9 @@ export function boxes(h) {
           ${chestHtml(B.color, 'small ' + k)}
           <b>${B.name}</b>
           <small>${B.drops}칸${B.luck > 1 ? ` · 행운 +${Math.round((B.luck - 1) * 100)}%` : ''}</small>
-          <button class="big open" data-box="${k}" ${all || s.gold < B.price ? 'disabled' : ''}>💰 ${B.price.toLocaleString()} G</button>
+          <button class="big open" data-box="${k}" ${s.gold < B.price ? 'disabled' : ''}>💰 ${B.price.toLocaleString()} G</button>
         </div>`).join('')}</div>
-      ${all ? '<p class="sub center"><b>🎉 모든 영웅을 모았어요!</b></p>' : `
+      ${all ? '<p class="sub center"><b>🎉 모든 영웅을 모았어요!</b> 이제 상자에서는 ⚡P.P와 골드가 나와요.</p>' : `
       <div class="luck"><span>🍀 행운</span><div class="lbar"><i style="width:${Math.min(100, (s.pity / GACHA.pity) * 100)}%"></i></div><span><b>${left}</b>칸 안에 영웅 확정</span></div>
       <div class="odds">${RARITY_ORDER.map((r) => `<div style="--r:${RARITY[r].color}"><b>${RARITY[r].name}</b><span>${odds[r] ? pctTxt(odds[r]) : '모두 보유'}</span></div>`).join('')}</div>
       <p class="sub center tiny">한 칸당 확률 (원소 상자 기준, 지금 행운 포함) · 이미 가진 영웅은 다시 나오지 않아요</p>`}
@@ -408,10 +489,10 @@ function openBox(h, key, drops) {
         ${Object.entries(pps).map(([c, n]) => `<div class="sp" data-c="${c}"><span class="pslot"></span><b>⚡+${n}</b><small>${CHARS[c].name}</small></div>`).join('')}
         <div class="sg">💰 <b>+${gold} G</b></div>
       </div>
-      ${hs.length ? '' : `<p class="sub">이번엔 영웅이 없었어요… 🍀 행운이 쌓였어요 (${GACHA.pity - s.pity}칸 안에 확정)</p>`}
+      ${hs.length || SV.allOwned() ? '' : `<p class="sub">이번엔 영웅이 없었어요… 🍀 행운이 쌓였어요 (${GACHA.pity - s.pity}칸 안에 확정)</p>`}
       <div class="col">
         ${hs.length ? `<button class="big go use" data-c="${hs[hs.length - 1].c}">${CHARS[hs[hs.length - 1].c].name}(으)로 출전</button>` : ''}
-        <button class="big again" ${SV.allOwned() || s.gold < B.price ? 'disabled' : ''}>한 번 더 (💰 ${B.price.toLocaleString()} G)</button>
+        <button class="big again" ${s.gold < B.price ? 'disabled' : ''}>한 번 더 (💰 ${B.price.toLocaleString()} G)</button>
         <button class="linkbtn back">← 상자 목록 (보유 💰 ${s.gold.toLocaleString()} G)</button>
       </div>
     </div>`;
@@ -503,6 +584,7 @@ export function layoutEdit(h) {
 // ---------- 스토리 장 선택 ----------
 export function story(h) {
   const s = SV.S();
+  const run = SV.getRun();
   const best = s.stats.best || 0;
   const bestTxt = best > CHAPTERS.length * 5 ? '모든 장 돌파!' : best ? `${Math.floor((best - 1) / 5) + 1}-${((best - 1) % 5) + 1}` : '아직 없음';
   show(`
@@ -512,13 +594,26 @@ export function story(h) {
       증강은 한 판 동안 계속 쌓이고, 전멸하면 처음부터! 모은 골드는 스킬 트리와 영웅 영입에 쓰세요.</p>
       <div class="route">${CHAPTERS.map((C, i) => `<div class="rch" style="--f:${C.floor[0]};--w:${C.wallTop}"><b>${i + 1}장</b><small>${C.name}</small><span>${[1, 2, 3, 4, 5].map((n) => `<i class="${n === 5 ? 'boss' : ''} ${best >= i * 5 + n ? 'done' : ''}"></i>`).join('')}</span></div>`).join('<span class="rarrow">▶</span>')}</div>
       <p class="sub center">🏆 최고 기록: <b>${bestTxt}</b> · 완주 ${s.stats.wins || 0}회</p>
+      ${run ? `<div class="runcard">
+        <span class="pslot"></span>
+        <div><b>이어하기 · ${run.ch + 1}-${run.st + 1}부터</b><small>${CHARS[run.char]?.name || ''} · 목숨 ${run.stocks} · 증강 ${run.augs.length}개${run.pendingAug?.length ? ' (+ 고를 증강)' : ''}<br>그 스테이지를 처음부터 다시 시작해요</small></div>
+      </div>
       <div class="col">
-        <button class="big go solo">모험 시작 (혼자)</button>
-        <button class="big go2 online">방 만들어 친구와 함께 (최대 4명)</button>
+        <button class="big go rsolo">이어하기 (혼자)</button>
+        <button class="big go2 ronline">이어하기 · 방 만들기</button>
+      </div>
+      <h3>새 모험</h3>` : ''}
+      <div class="col">
+        <button class="big ${run ? '' : 'go'} solo">${run ? '처음부터 새로 (혼자)' : '모험 시작 (혼자)'}</button>
+        <button class="big ${run ? '' : 'go2'} online">방 만들어 친구와 함께 (최대 4명)</button>
       </div>
     </div>`);
-  bind('.solo', () => h.start({ mode: 'story', ch: 0, online: false }));
-  bind('.online', () => h.start({ mode: 'story', ch: 0, online: true }));
+  if (run) $menu.querySelector('.runcard .pslot').appendChild(portrait(run.char, 56, true));
+  const fresh = (online) => { if (run && !confirm(`저장된 진행(${run.ch + 1}-${run.st + 1})이 지워져요. 처음부터 시작할까요?`)) return; h.start({ mode: 'story', ch: 0, online }); };
+  bind('.solo', () => fresh(false));
+  bind('.online', () => fresh(true));
+  bind('.rsolo', () => h.start({ mode: 'story', ch: 0, online: false, resume: true }));
+  bind('.ronline', () => h.start({ mode: 'story', ch: 0, online: true, resume: true }));
   bind('.back', () => h.back());
 }
 
@@ -626,7 +721,7 @@ export function pause(h, info) {
       <div class="col">
         <button class="resume big">계속하기</button>
         <button class="mute">${info.muted ? '🔇 소리 켜기' : '🔊 소리 끄기'}</button>
-        <button class="quit">메뉴로 나가기</button>
+        <button class="quit">메뉴로 나가기${info.story ? ' (이 스테이지부터 이어하기 저장)' : ''}</button>
       </div>
     </div>`);
   bind('.resume', () => h.resume());

@@ -386,3 +386,22 @@ button.big.lvup:disabled { opacity: .5; }
 .lay .bar input[type=range] { width: 110px; padding: 0; }
 .lay .hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: rgba(255, 255, 255, .35); font-size: 14px; text-align: center; pointer-events: none; }
 .setrow button { white-space: nowrap; flex: none; }
+.runcard { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: linear-gradient(135deg, rgba(46, 125, 50, .25), rgba(20, 16, 40, .6)); border: 1px solid #66bb6a; }
+.runcard b { display: block; font-size: 16px; } .runcard small { color: var(--sub); font-size: 12px; }
+
+/* 스킬 미리보기 */
+.skc { text-align: left; cursor: pointer; position: relative; font: inherit; color: inherit; }
+.skc .play { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: var(--gold); font-size: 12px; opacity: .8; }
+.skdemo { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(4, 3, 10, .72); }
+.sdbox { width: min(640px, 100%); max-height: 100%; overflow-y: auto; background: var(--panel); border: 2px solid var(--c); border-radius: 16px; padding: 12px 14px; box-shadow: 0 0 40px -10px var(--c); }
+.sdhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.sdhead b { font-family: 'Black Han Sans', sans-serif; font-weight: 400; font-size: 24px; color: var(--c); }
+.sdview { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 12px; background: #000; border: 1px solid var(--line); }
+/* 세계 960x640 중 가로 200~800, 세로 165~502 부분만 보여 줌 */
+.sdview canvas { position: absolute; width: 160%; left: -33.3%; top: -48.9%; image-rendering: pixelated; }
+.sdview .sdkey { position: absolute; left: 8px; bottom: 6px; font-size: 12px; font-weight: 700; color: #fff; background: rgba(0, 0, 0, .55); padding: 2px 8px; border-radius: 8px; }
+.sddesc { margin: 8px 2px; font-size: 13px; color: var(--ink); line-height: 1.55; min-height: 40px; }
+.sdtabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.sdtabs button { font-size: 11px; padding: 6px 4px; line-height: 1.3; }
+.sdtabs button b { font-size: 12px; }
+.sdtabs button.on { border-color: var(--c); background: #3a2f6c; box-shadow: 0 0 10px -3px var(--c); }

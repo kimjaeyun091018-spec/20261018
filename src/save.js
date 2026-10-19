@@ -78,7 +78,7 @@ function rollHero(box, force) {
 // 상자 열기: 골드를 내고 칸들을 굴림 → [{ t:'hero', c } | { t:'gold', n, jackpot }]
 export function openBox(box) {
   const B = BOXES[box];
-  if (!B || data.gold < B.price || allOwned()) return null;
+  if (!B || data.gold < B.price) return null; // 영웅을 다 모아도 열 수 있음 (P.P·골드)
   data.gold -= B.price;
   const drops = [];
   for (let i = 0; i < B.drops; i++) {
@@ -117,6 +117,9 @@ export function levelUp(c) {
   data.lv[c] = lv + 1; save();
   return true;
 }
+// ---------- 이어하기 (스토리 진행 중 메뉴로 나간 곳) ----------
+export const getRun = () => data.run || null;
+export function setRun(r) { data.run = r || null; save(); }
 export function addGold(n) { data.gold = Math.max(0, data.gold + Math.round(n)); save(); }
 export function canBuy(id) {
   const n = TREE.find((t) => t.id === id);

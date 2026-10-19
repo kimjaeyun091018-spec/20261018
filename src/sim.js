@@ -356,7 +356,7 @@ function triggerReaction(s, t, R, by) {
 // ============================================================
 function moveBody(s, u, wx, wy, dt) {
   const kSpeed = Math.hypot(u.kvx, u.kvy);
-  const flying = kSpeed >= KNOCK.pitSpeed; // 대시로는 공허를 건너지 못함 (가장자리에서 멈춤)
+  const flying = kSpeed >= KNOCK.pitSpeed || !!u.dash?.leap; // 대시로는 공허를 건너지 못함 (뛰어넘는 돌진 스킬만 예외)
   const vx = wx + u.kvx, vy = wy + u.kvy;
   for (const axis of [0, 1]) {
     const d = (axis ? vy : vx) * dt;
@@ -430,6 +430,15 @@ function useSkill(s, h, i) {
   const C = CHARS[h.char];
   let S = C.skills[i];
   if (h.cds[i] > 0 || frozenOrStunned(h) || h.dash || h.chan || h.snipe || h.roll || h.fall > 0 || !h.alive) return;
+  // 긴 돌진: 가는 길에 공허가 있으면, 건너편 착지점이 땅일 때만 뛰어넘어 씀 (아니면 못 씀)
+  let leap = false;
+  if (S.type === 'dashstrike') {
+    const P = dashPath(s, h, Math.cos(h.aim), Math.sin(h.aim), S.dist);
+    if (P.void) {
+      if (!P.safe) { if ((h.nopeT || 0) < s.time) { h.nopeT = s.time + 0.8; fxPush(s, { k: 'nope', x: h.x, y: h.y, who: h.id, t: 0.8 }); } return; }
+      leap = true;
+    }
+  }
   h.cds[i] = cdOf(s, h, i);
   h.atkT = 0.18;
   const ux = Math.cos(h.aim), uy = Math.sin(h.aim);
@@ -479,8 +488,20 @@ function useSkill(s, h, i) {
       }
       break;
     }
+    case 'parry': { // 화룡의 숨결: 한 바퀴 휘둘러 투사체 되받아치기 + 주변 적 밀쳐 내기
+      h.parryT = S.window; h.parryS = S;
+      reflectNear(s, h, S);
+      for (const t of foesOf(s, h.team)) {
+        if (dist(t, h) > S.r + t.r) continue;
+        hit(s, t, { dmg: S.dmg, kb: S.kb, el: S.el, ux: t.x - h.x || 1, uy: t.y - h.y, by: h });
+      }
+      fxPush(s, { k: 'slash', x: h.x, y: h.y, a: h.aim, r: S.r, arc: Math.PI * 2 - 0.05, el: S.el, char: h.char, big: true, flip: 0, t: 0.4, hitAny: true });
+      fxPush(s, { k: 'nova', x: h.x, y: h.y, r: S.r, look: 'firesweep', el: S.el, t: 0.45, shake: 7 });
+      break;
+    }
     case 'dashstrike':
-      h.dash = { vx: ux * (S.dist / S.time), vy: uy * (S.dist / S.time), t: S.time, hit: new Set(), S, i };
+      h.dash = { vx: ux * (S.dist / S.time), vy: uy * (S.dist / S.time), t: S.time, hit: new Set(), S, i, leap };
+      if (leap) fxPush(s, { k: 'voidleap', x: h.x, y: h.y, a: h.aim, t: 0.5 });
       h.inv = Math.max(h.inv, S.time + 0.08);
       fxPush(s, { k: 'dashstart', x: h.x, y: h.y, a: h.aim, el: S.el, look: S.look, len: S.dist, dur: S.time, t: 0.45 });
       break;
@@ -544,6 +565,32 @@ function useSkill(s, h, i) {
       break;
     }
     default:
+  }
+}
+// 돌진 경로 살피기: 벽에서 멈추는 곳까지 가며 공허를 지나는지, 끝이 안전한 땅인지
+function dashPath(s, h, ux, uy, L) {
+  let x = h.x, y = h.y, crossed = false;
+  for (let d = 6; d <= L; d += 6) {
+    const nx = h.x + ux * d, ny = h.y + uy * d;
+    if (circleInWall(s.map, nx, ny, h.r)) break;
+    x = nx; y = ny;
+    if (tileAt(s.map, x, y) === 'o') crossed = true;
+  }
+  return { void: crossed, safe: safeFloor(s.map, x, y, h.r * 0.7), x, y };
+}
+// 되받아치기: 가까운 적 투사체를 내 것으로 바꿔 가장 가까운 적에게 (없으면 반대로)
+function reflectNear(s, h, S) {
+  for (const p of s.shots) {
+    if (p.team === h.team || p.life <= 0 || p.pull || p.hook) continue;
+    if (Math.hypot(p.x - h.x, p.y - h.y) > S.r + 30) continue;
+    const t = foesOf(s, h.team).sort((a, b) => dist(a, p) - dist(b, p))[0];
+    const sp = Math.hypot(p.vx, p.vy) * 1.2 || 400;
+    const a = t && dist(t, p) < 600 ? Math.atan2(t.y - p.y, t.x - p.x) : Math.atan2(-p.vy, -p.vx);
+    p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp;
+    p.team = h.team; p.owner = h.id; p.src = h; p.dmg *= S.reflect; p.hits = new Map(); p.home = 0;
+    p.life = Math.max(p.life, 1.2); p.lob = null; p.z = 0; p.reflected = true;
+    if (!p.kb || (!p.kb[0] && !p.kb[1])) p.kb = [160, 260];
+    fxPush(s, { k: 'reflect', x: p.x, y: p.y, t: 0.3 });
   }
 }
 function spawnShot(s, src, S, a, basic = false) {
@@ -735,6 +782,7 @@ function updateHero(s, h, inp, dt) {
   if (h.combo.t <= 0) h.combo.n = 0;
   h.chainT = Math.max(0, h.chainT - dt);
   h.empower = Math.max(0, h.empower - dt);
+  if (h.parryT > 0) { h.parryT -= dt; reflectNear(s, h, h.parryS); }
   h.slowT = Math.max(0, h.slowT - dt);
   for (const k of Object.keys(h.buf)) { h.buf[k] -= dt; if (h.buf[k] <= 0) delete h.buf[k]; }
   // 증강 고르기 (입력의 pick = 0/1/2)
@@ -1157,8 +1205,8 @@ function bossSplit(s, e) {
   say(s, g === 1 ? '슬라임 왕이 둘로 갈라졌다!' : '더 작게 갈라졌다!', 1.4);
 }
 function giveGold(s, n, x, y) {
-  const mul = 1 + Math.max(0, ...heroList(s).map((h) => h.b.gold));
-  const v = Math.round(n * mul);
+  const mul = (1 + Math.max(0, ...heroList(s).map((h) => h.b.gold))) * (s.mode === 'story' ? STORY.goldMul : 1);
+  const v = Math.max(1, Math.round(n * mul));
   s.gold += v;
   fxPush(s, { k: 'gold', x, y, v, t: 0.9 });
 }
@@ -1602,6 +1650,7 @@ function nextStage(s) {
 }
 function updateStory(s, dt) {
   const S = s.story;
+  if (S.phase === 'demo') return;
   const heroes = heroList(s);
   if (S.phase === 'fail' || S.phase === 'done') { S.t -= dt; return; }
   if (heroes.length && heroes.every((h) => h.out)) { S.phase = 'fail'; S.t = 99; say(s, '전멸… 다시 도전!', 99); return; }
@@ -1766,7 +1815,7 @@ export function snapshot(s) {
       ch: h.chan ? 1 : 0, ds: h.dash ? (h.dash.S.look || 1) : 0, ro: h.roll ? 1 : 0, sp: h.snipe ? 1 : 0, em: h.empower > 0 ? 1 : 0, st: stCode(h),
       cd: h.cds.map(r1), cm: [0, 1, 2, 3].map((i) => r1(cdOf(s, h, i))), dc: h.dashCh, dm: h.dashMax, cb: h.combo.n, mc: h.maxCombo, ko: h.kos, rs: r1(Math.max(0, h.respawn)), bot: h.bot ? 1 : 0,
       ln: Math.hypot(h.kvx, h.kvy) > 380 ? 1 : 0, ob: s.mode === 'story' ? h.b.orbs : 0, sz: r1(h.b.size || 0),
-      lv: h.lv, sh: h.shieldMax ? [Math.ceil(h.shield), h.shieldMax] : 0,
+      lv: h.lv, sh: h.shieldMax ? [Math.ceil(h.shield), h.shieldMax] : 0, lp: h.dash?.leap ? 1 : 0,
       bf: Object.keys(h.buf).join(','), au: h.augs, cho: h.choice ? { o: h.choice.opts, tier: h.choice.tier, t: Math.ceil(h.choice.t) } : null,
     })),
     e: s.enemies.map((e) => [e.id, e.type, r1(e.x), r1(e.y), Math.ceil(e.hp), e.maxHp, r1(e.fall), e.flash > 0 ? 1 : 0, r1(e.face), stCode(e), e.spawning ? 1 : 0, r1(e.z || 0), e.boss ? 1 : 0, e.act ? e.act.type : 0, e.act?.a !== undefined ? r1(e.act.a) : 0, Math.hypot(e.kvx, e.kvy) > 380 ? 1 : 0, e.ai === 'shield' ? (shieldUp(e) ? e.mode + 1 : 4) : 0, r1(e.r), e.z2 ? r1(e.z2) : 0]),
@@ -1794,3 +1843,55 @@ export function debugSpawn(s, kind, x, y, hpMul = 1) {
 export function debugAug(s, id, augId) { const h = s.heroes[id]; if (h) { h.augs.push(augId); recompute(s, h); } }
 export function debugXp(s, n) { giveXp(s, n); }
 export function debugHit(s, id, dmg) { const e = s.enemies.find((u) => u.id === id); if (e) { e.inv = 0; hit(s, e, { dmg, kb: [0, 0], ux: 1, uy: 0, by: Object.values(s.heroes)[0] }); } }
+
+// ---------- 이어하기: 저장해 둔 영웅 상태(증강·목숨)를 되살림 ----------
+export function restoreHero(s, id, r) {
+  const h = s.heroes[id];
+  if (!h || !r) return;
+  h.augs = (r.augs || []).filter((a) => AUGMENTS.some((x) => x.id === a));
+  h.stocks = Math.max(1, Math.min(STORY.maxLives + 2, r.stocks || STORY.lives));
+  recompute(s, h);
+  h.dashCh = h.dashMax; h.shield = h.shieldMax;
+  for (const t of r.pendingAug || []) h.choiceQ.push(t);
+}
+// 이어하기용 요약 (스테이지 안의 진행·웨이브는 저장하지 않음 → 그 스테이지 처음부터)
+export function runSummary(s, id) {
+  const S = s.story, h = s.heroes[id];
+  if (!S || !h || S.phase === 'fail' || S.phase === 'done' || S.phase === 'demo') return null;
+  let ch = S.ch, st = S.st;
+  const pendingAug = [];
+  if (h.choice) pendingAug.push(h.choice.tier);
+  pendingAug.push(...h.choiceQ);
+  if (S.cleared) {
+    if (S.portal && !S.portal.open && S.portal.rise < 1 && S.portal.tier) pendingAug.push(S.portal.tier);
+    if (st + 1 < STAGES_PER_CHAPTER) st++;
+    else if (ch + 1 < CHAPTERS.length) { ch++; st = 0; }
+    else return null;
+  }
+  return { ch, st, char: h.char, augs: [...h.augs], stocks: Math.max(1, h.alive || h.stocks > 0 ? h.stocks : 1), pendingAug, t: Date.now() };
+}
+// ---------- 스킬 미리보기 (영웅 화면) ----------
+export function createDemo(char) {
+  const s = createState('story', 'me', { ch: 0, st: 0 });
+  const rows = [];
+  for (let y = 0; y < ROWS; y++) { let r = ''; for (let x = 0; x < COLS; x++) r += x < 1 || y < 1 || x >= COLS - 1 || y >= ROWS - 1 ? 'o' : x === 4 && y === 10 ? 'P' : '.'; rows.push(r); }
+  s.map = parseMap(rows); s.mapKey = 'D1-0'; s.shift = null; s.fp = fpOf(s.map.tiles);
+  s.story.phase = 'demo';
+  addHero(s, 'me', '', char, {});
+  return s;
+}
+export function demoReset(s, opt = {}) {
+  Object.assign(s, { enemies: [], shots: [], zones: [], hazards: [], pending: [], items: [], fx: s.fx, ice: new Map() });
+  const h = s.heroes.me;
+  Object.assign(h, { x: 380, y: 330, kvx: 0, kvy: 0, aim: 0, aimD: 170, pct: 0, inv: 99, cds: [0, 0, 0, 0], chan: null, dash: null, roll: null, snipe: null, stun: 0, st: {}, fall: 0, alive: true, chainT: 0, ivx: 0, ivy: 0 });
+  for (const [x, y] of opt.shots ? [[470, 330], [420, 255], [430, 405]] : [[560, 330], [610, 270], [620, 395]]) {
+    const e = makeEnemy(s, 'slime', x, y, { hp: 99, dmg: 0 });
+    e.ai = 'dummy'; e.inv = 0; e.cd = 99;
+    s.enemies.push(e);
+  }
+  // 되받아치기 미리보기: 오른쪽에서 투사체가 날아옴
+  if (opt.shots) {
+    const src = { x: 760, y: 330, id: -1, team: 'E', aimD: 300 };
+    for (const a of [-0.12, 0, 0.12]) spawnShot(s, src, { speed: 330, r: 7, power: 1, dmg: 8, kb: [120, 160], life: 3, look: 'eorb' }, Math.PI + a);
+  }
+}

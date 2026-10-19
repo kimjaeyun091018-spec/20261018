@@ -77,12 +77,12 @@ export const CHARS = {
     name: '카이엔', title: '홍련의 기사', rarity: 'start', price: 0,
     lore: '멸망한 불꽃 왕국의 마지막 기사. 왕의 검에 깃든 꺼지지 않는 불꽃을 지키며, 다시는 아무것도 잃지 않겠다고 맹세했다.',
     quote: '이 불꽃이 꺼지는 일은 없다.', row: 0, el: 'fire', role: '근접 돌격', cloth: '#d32f2f', color: '#ff7043', hp: 130, speed: 175, weight: 1.15,
-    desc: '삼연참으로 몰아붙이고, 불새 돌격으로 끝까지 날려 버리는 정면 돌격형.',
+    desc: '삼연참으로 몰아붙이고, 불새 돌격으로 끝까지 날려 버리는 정면 돌격형. 화룡의 숨결로 날아오는 투사체를 되받아친다.',
     skills: [
       { name: '홍련 삼연참', type: 'slash', cd: 0.32, range: 64, arc: 1.5, dmg: 9, kb: [110, 200], el: 'fire', chain: [{ dmg: 9 }, { dmg: 10, arcMul: 1.1 }, { dmg: 16, kb: [220, 380], arcMul: 1.4, rangeMul: 1.2, big: true }] },
       { name: '업화구', type: 'shot', cd: 2.2, el: 'fire', speed: 420, r: 12, power: 2.2, dmg: 18, kb: [170, 300], life: 1.4, look: 'fireball', explode: { r: 48, dmg: 8, kb: [140, 200] } },
       { name: '불새 돌격', type: 'dashstrike', cd: 4.5, dist: 240, time: 0.18, width: 36, dmg: 22, kb: [240, 450], el: 'fire', look: 'flame' },
-      { name: '화룡의 숨결', type: 'stream', cd: 7, el: 'fire', time: 1.3, every: 0.045, speed: 320, r: 10, spread: 0.26, power: 0.6, dmg: 3, kb: [40, 70], life: 0.45, look: 'flame', slow: 0.5 },
+      { name: '화룡의 숨결', type: 'parry', cd: 6.5, el: 'fire', r: 118, dmg: 14, kb: [330, 470], window: 0.45, reflect: 1.6, desc: '검을 크게 한 바퀴 휘둘러 날아오는 투사체를 되받아치고(피해 1.6배), 주변 적을 바깥으로 밀쳐 냄' },
     ],
   },
   archer: {
@@ -264,11 +264,11 @@ export const RARITY = {
 };
 export const RARITY_ORDER = ['rare', 'super', 'epic', 'legend'];
 export const BOXES = {
-  small: { name: '원소 상자', price: 120, drops: 1, luck: 1, color: '#42a5f5', gold: [25, 70] },
-  big: { name: '큰 원소 상자', price: 330, drops: 3, luck: 1.15, color: '#ab47bc', gold: [25, 70] },
-  mega: { name: '메가 원소 상자', price: 1000, drops: 10, luck: 1.35, color: '#ff7043', gold: [25, 70] },
+  small: { name: '원소 상자', price: 120, drops: 1, luck: 1, color: '#42a5f5', gold: [12, 35] },
+  big: { name: '큰 원소 상자', price: 330, drops: 3, luck: 1.15, color: '#ab47bc', gold: [12, 35] },
+  mega: { name: '메가 원소 상자', price: 1000, drops: 10, luck: 1.35, color: '#ff7043', gold: [12, 35] },
 };
-export const GACHA = { luckPer: 0.06, pity: 45, jackpot: 0.04, jackpotGold: [220, 380], ppChance: 0.55, pp: [8, 26] };
+export const GACHA = { luckPer: 0.06, pity: 45, jackpot: 0.04, jackpotGold: [110, 200], ppChance: 0.55, pp: [8, 26] };
 // 영웅 그림: assets/heroes.png 한 칸 48x48 (발끝 46행), 한 줄 = 한 캐릭터
 //  0-3 서기 · 4-9 걷기 · 10 준비 · 11 공격 · 12 마무리 · 13 맞음 · 14 쓰러짐 · 15 승리
 // assets/portraits.png 한 칸 64x64 (캐릭터 순서대로 가로)
@@ -334,8 +334,9 @@ export const STORY = {
   hpScale: (ch, st) => 1 + ch * 0.9 + st * 0.15,   // 적 체력 배율
   dmgScale: (ch, st) => 1 + ch * 0.25 + st * 0.05,  // 적 피해(=영웅에게 쌓이는 %) 배율
   countAdd: (ch, st) => Math.floor(st / 2) + ch,   // 웨이브마다 추가되는 적 수
-  chestGold: (ch, st) => 20 + ch * 25 + st * 6,
-  bossGold: (ch) => 120 + ch * 80,
+  chestGold: (ch, st) => 20 + ch * 25 + st * 6,   // (goldMul이 곱해짐)
+  bossGold: (ch) => 110 + ch * 70,
+  goldMul: 0.5,       // 적 처치 골드 배율
   lives: 3,           // 장 하나를 도는 동안 목숨 (공허에 떨어지면 -1)
   maxLives: 5,
   pctPerDmg: 0.8,     // 받은 피해 1당 쌓이는 %
@@ -419,5 +420,5 @@ export const TREE = [
 ];
 
 // ---------- 콜로세움 (PvP) ----------
-export const COLOSSEUM = { stocks: 3, respawn: 1.8, restart: 4, collapseAt: 28, collapseEvery: 11, collapseMax: 6, itemEvery: 12, winGold: 40 };
+export const COLOSSEUM = { stocks: 3, respawn: 1.8, restart: 4, collapseAt: 28, collapseEvery: 11, collapseMax: 6, itemEvery: 12, winGold: 25 };
 export const TEAM_COLORS = ['#ef5350', '#42a5f5', '#66bb6a', '#ffca28'];

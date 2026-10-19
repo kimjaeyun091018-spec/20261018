@@ -219,6 +219,9 @@ export function createRenderer(canvas) {
         case 'augpick': { const A = AUGMENTS.find((a) => a.id === f.aug); if (A) ui.say(f.x, f.y - 50, `${A.icon} ${A.name}`, f.legend ? '#ff9100' : '#ffe082', f.legend ? 22 : 18); break; }
         case 'collapse': collapseFx(f.tiles || []); break;
         case 'rise': riseFx(f.tiles || []); break;
+        case 'nope': if (f.who === myId) ui.say(f.x, f.y - 46, '건너편에 땅이 없어요!', '#ff8a80', 15); break;
+        case 'voidleap': P.burst(f.x, f.y, 14, { kind: 'smoke', color: '#b0bec5', sp: [60, 180], life: [0.3, 0.6], size: [4, 7], grow: 10 }); ui.say(f.x, f.y - 46, '도약!', '#80d8ff', 15); break;
+        case 'reflect': P.burst(f.x, f.y, 12, { kind: 'spark', color: ['#ffd54f', '#ff7043', '#ffffff'], sp: [150, 380], life: [0.15, 0.35], size: [2, 3.5] }); ui.say(f.x, f.y - 20, '반사!', '#ffd54f', 14); break;
         case 'bosssplit': P.burst(f.x, f.y, 50, { kind: f.snow ? 'smoke' : 'glow', color: f.snow ? ['#ffffff', '#e1f5fe', '#b3e5fc'] : [f.color, '#ffffff'], sp: [120, 420], life: [0.5, 1], size: [4, 9], grow: f.snow ? 14 : 0, drag: 2 }); flash = 0.2; flashCol = '#e1f5fe'; break;
         case 'snowburst': P.burst(f.x, f.y, 26, { kind: 'smoke', color: ['#ffffff', '#e1f5fe'], sp: [80, 260], life: [0.4, 0.8], size: [5, 9], grow: 12, drag: 3 }); P.burst(f.x, f.y, 14, { kind: 'glow', color: '#b3e5fc', sp: [100, 300], life: [0.3, 0.6], size: [2, 3] }); break;
         case 'allythrow': P.burst(f.x, f.y - 10, 4, { kind: 'glow', color: '#e1f5fe', sp: [30, 90], life: [0.2, 0.3], size: [2, 2] }); break;
@@ -353,7 +356,7 @@ export function createRenderer(canvas) {
     const sc = 1 + (h.sz || 0);
     let lift = 0;
     const A = anim.get(h.id);
-    if (h.ds === 'leap' && A) { const k = clamp((now - A.t) / 300, 0, 1); lift = Math.sin(k * Math.PI) * 60; }
+    if ((h.ds === 'leap' || h.lp) && A) { const k = clamp((now - A.t) / 300, 0, 1); lift = Math.sin(k * Math.PI) * 60; }
     if ((h.ds || h.ro) && Math.random() < 0.7) ghosts.push({ h: { ...h }, frame: heroFrame(h, now), x, y, lift, life: 0.22, max: 0.22, sc });
     // 날아가는 중: 연기 꼬리
     if (h.ln && Math.random() < 0.9) { P.add({ kind: 'smoke', x: x + rnd(-4, 4), y: y - 10 + rnd(-4, 4), vx: rnd(-10, 10), vy: rnd(-10, 10), life: 0.6, size: 5, grow: 14, color: '#eceff1', alpha: 0.9 }); }

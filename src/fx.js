@@ -527,6 +527,7 @@ export function spawnFx(f, P, ui) {
     case 'nova': {
       if (f.look === 'frost') { for (let i = 0; i < 28; i++) { const a = (i / 28) * TAU; P.add({ kind: 'shard', x: f.x, y: f.y, vx: Math.cos(a) * rnd(300, 480), vy: Math.sin(a) * rnd(300, 480), rot: a, vr: 0, life: 0.4, size: rnd(3, 6), color: i % 2 ? '#e1f5fe' : '#81d4fa', drag: 5 }); } P.burst(f.x, f.y, 20, { kind: 'glow', color: '#e1f5fe', sp: [100, 360], life: [0.3, 0.6], size: [2, 3] }); }
       if (f.look === 'quake') { P.burst(f.x, f.y, 26, { kind: 'rock', color: ['#8d6e63', '#6d4c41', '#a1887f'], sp: [120, 380], life: [0.4, 0.8], size: [3, 6], grav: 700 }); P.burst(f.x, f.y, 16, { kind: 'smoke', color: '#a1887f', sp: [80, 260], life: [0.6, 1], size: [6, 10], grow: 20, drag: 3 }); }
+      if (f.look === 'firesweep') { for (let i = 0; i < 36; i++) { const a = (i / 36) * TAU; P.add({ kind: 'ember', x: f.x + Math.cos(a) * f.r * 0.8, y: f.y + Math.sin(a) * f.r * 0.8, vx: Math.cos(a + 1.3) * rnd(200, 380), vy: Math.sin(a + 1.3) * rnd(200, 380), life: rnd(0.3, 0.55), size: rnd(2, 4), color: ['#ffab40', '#ff7043', '#ffd54f'][i % 3], drag: 3 }); } }
       if (f.look === 'reap') { for (let i = 0; i < 30; i++) { const a = (i / 30) * TAU; P.add({ kind: 'glow', x: f.x + Math.cos(a) * f.r, y: f.y + Math.sin(a) * f.r, vx: -Math.cos(a) * 300, vy: -Math.sin(a) * 300, life: 0.4, size: 3, color: i % 2 ? '#e040fb' : '#7c4dff', drag: 2 }); } }
       break;
     }

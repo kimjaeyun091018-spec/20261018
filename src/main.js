@@ -250,8 +250,13 @@ async function startGame(cfg) {
   game_last = cfg;
   const me = SV.S();
   const myId = 'me';
-  const state = SIM.createState(cfg.mode, myId, cfg);
+  // 이어하기: 저장해 둔 스테이지부터 (그 스테이지는 처음부터)
+  const run = cfg.mode === 'story' && cfg.resume ? SV.getRun() : null;
+  if (run && SV.owns(run.char)) SV.setChar(run.char);
+  if (cfg.mode === 'story' && !run) SV.setRun(null);
+  const state = SIM.createState(cfg.mode, myId, run ? { ...cfg, ch: run.ch, st: run.st } : cfg);
   SIM.addHero(state, myId, me.name || '나', me.char, heroOpts(cfg, 0));
+  if (run) SIM.restoreHero(state, myId, run);
   if (cfg.mode === 'colosseum' && !cfg.online) {
     const pool = Object.keys(CHARS).filter((k) => k !== me.char).sort(() => Math.random() - 0.5);
     const n = cfg.fmt === '1v1' ? 1 : 3;
@@ -327,11 +332,19 @@ function enterPlay(char) {
 }
 function quitGame(keepCfg = false) {
   if (!game) return toMenu();
+  saveRun(game);
   settle(game);
   game.room?.close(); game.conn?.close();
   game = null;
   $controls.hidden = true; $hudTop.hidden = true; $code.hidden = true;
   if (!keepCfg) toMenu();
+}
+// 스토리 진행 저장 (방장·혼자일 때만): 다음에 그 스테이지부터 이어서
+function saveRun(g) {
+  if (!g || g.role === 'client' || g.state.mode !== 'story') return;
+  if (g.ended) { SV.setRun(null); return; }
+  const r = SIM.runSummary(g.state, g.myId);
+  if (r) SV.setRun(r);
 }
 // 판 정산: 스토리 골드를 저장
 function settle(g) {
@@ -347,7 +360,7 @@ function togglePause() {
   if (!game) return;
   if (game.paused) { handlers.resume(); return; }
   game.paused = true;
-  UI.pause(handlers, { code: game.code, muted: SV.S().muted });
+  UI.pause(handlers, { code: game.code, muted: SV.S().muted, story: game.state?.mode === 'story' && game.role !== 'client' });
 }
 document.getElementById('btnPause').addEventListener('click', togglePause);
 
@@ -358,6 +371,7 @@ function checkEnd() {
   const s = g.state;
   if (s.mode === 'story' && (s.story.phase === 'done' || s.story.phase === 'fail') && s.story.t < 97.5) {
     g.ended = true;
+    SV.setRun(null);
     const win = s.story.phase === 'done';
     // 도달한 곳 (1-1 = 1 … 4-5 = 20, 끝까지 깨면 21)
     const reached = s.story.ch * 5 + s.story.st + 1 + (win ? 1 : 0);
@@ -426,6 +440,10 @@ function frame(now) {
   }
   const snap = SIM.snapshot(g.state);
   g.lastSnap = snap;
+  if (g.state.mode === 'story' && !g.ended) {
+    const key = `${g.state.story.ch}-${g.state.story.st}`;
+    if (key !== g.stageKey && g.state.story.phase === 'intro') { g.stageKey = key; saveRun(g); }
+  }
   if (g.role === 'host' && g.room) {
     g.sendT -= dt;
     if (g.sendT <= 0) {
