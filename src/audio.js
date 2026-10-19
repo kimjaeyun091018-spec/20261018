@@ -106,6 +106,11 @@ export function fxSound(f) {
     case 'pillar': sfx(f.look === 'lava' ? 'fire' : 'earth', 0.06); break;
     case 'heal': sfx('heal', 0.25); break;
     case 'execute': sfx('shadow'); break;
+    case 'collapse': sfx('boom', 0.2); break;
+    case 'rise': case 'portalrise': sfx('earth', 0.2); break;
+    case 'portalopen': sfx('chest'); sfx('heal'); break;
+    case 'warp': sfx('react'); break;
+    case 'crumble': sfx('warn', 0.3); break;
     default:
   }
 }

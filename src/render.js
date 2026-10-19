@@ -2,7 +2,6 @@
 //  원소 아레나 — 화면 그리기 (공허 · 지도 · 캐릭터 · 적 · 아이템 · HUD)
 // ============================================================
 import { TILE, COLS, ROWS, VIEW_W, VIEW_H, CHARS, CHAR_KEYS, ENEMIES, ENEMY_SHEET, BOSSES, CHAPTERS, COLOSSEUM, ITEMS, AUGMENTS, HERO_SPRITE, HERO_SHEETS } from './data.js';
-import { mapRowsFor, ringOf } from './sim.js';
 import { Particles, drawShot, drawZone, drawFx, spawnFx, elColor } from './fx.js';
 
 const TAU = Math.PI * 2;
@@ -75,8 +74,8 @@ function themeOf(key) {
   const C = CHAPTERS[ch];
   return { floor: C.floor, wall: C.wall, wallTop: C.wallTop, cliff: ['#2a2016', '#221a2c', '#2b1610'][ch], deco: ['grass', 'bone', 'ember'][ch] };
 }
-function buildMap(key, level) {
-  const rows = mapRowsFor(key, level), th = themeOf(key);
+function buildMap(rows, key) {
+  const th = themeOf(key);
   const c = document.createElement('canvas');
   c.width = VIEW_W; c.height = VIEW_H;
   const g = c.getContext('2d');
@@ -160,10 +159,7 @@ function buildMap(key, level) {
       if (solid(x, y + 1)) { g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(px, py + TILE, TILE, 6); }
     }
   }
-  // 무너질 수 있는 줄의 칸 목록 (경고 연출용)
-  const ringTiles = {};
-  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (solid(x, y)) (ringTiles[ringOf(x, y)] ||= []).push([x, y]);
-  return { c, ringTiles, th };
+  return { c, th };
 }
 
 // ============================================================
@@ -219,18 +215,30 @@ export function createRenderer(canvas) {
         case 'levelup': banners.push({ text: `LEVEL ${f.lv}`, sub: '레벨 업! 증강을 고르세요', color: '#ffd54f', t: 1.8, max: 1.8 }); break;
         case 'pickup': ui.say(f.x, f.y - 20, f.name, f.color, 16); break;
         case 'augpick': { const A = AUGMENTS.find((a) => a.id === f.aug); if (A) ui.say(f.x, f.y - 50, `${A.icon} ${A.name}`, f.legend ? '#ff9100' : '#ffe082', f.legend ? 22 : 18); break; }
-        case 'collapse': collapseFx(f.ring); break;
+        case 'collapse': collapseFx(f.tiles || []); break;
+        case 'rise': riseFx(f.tiles || []); break;
+        case 'portalrise': portalFx.rise = performance.now(); P.burst(f.x, f.y, 30, { kind: 'smoke', color: ['#bcaaa4', '#8d6e63'], sp: [60, 220], life: [0.6, 1.2], size: [5, 10], grow: 14 }); P.burst(f.x, f.y, 26, { kind: 'rock', color: ['#795548', '#5d4037'], sp: [120, 300], life: [0.6, 1], size: [3, 6], grav: 700, a: -Math.PI / 2, spread: 1.2 }); break;
+        case 'portalopen': flash = 0.35; flashCol = '#fff8e1'; banners.push({ text: '빛의 문', sub: '문이 열렸다! 안으로 들어가세요', color: '#ffe082', t: 1.3, max: 1.3 }); P.burst(f.x, f.y - 60, 60, { kind: 'glow', color: ['#fffde7', '#ffe082', '#80d8ff'], sp: [80, 380], life: [0.6, 1.3], size: [2, 5] }); break;
+        case 'warp': flash = 0.6; flashCol = '#ffffff'; P.burst(f.x, f.y - 40, 80, { kind: 'glow', color: ['#ffffff', '#ffe082', '#b3e5fc'], sp: [100, 500], life: [0.5, 1], size: [2, 5] }); break;
         default:
       }
       hooks.onFx?.(f, myId);
     }
   }
-  function collapseFx(ring) {
-    const tiles = curMap?.ringTiles[ring] || [];
+  function collapseFx(idx) {
     const th = curMap?.th;
-    for (const [x, y] of tiles) {
+    for (const i of idx) {
+      const x = i % COLS, y = (i / COLS) | 0;
       for (let i = 0; i < 2; i++) P.add({ kind: 'rock', x: (x + 0.25 + i * 0.5) * TILE, y: (y + 0.5) * TILE, vx: rnd(-30, 30), vy: rnd(-60, 10), grav: 520, life: rnd(0.7, 1.1), size: rnd(9, 14), color: th ? th.floor[(x + y + i) % 2] : '#555', drag: 0.5, grow: -10 });
       if (Math.random() < 0.4) P.add({ kind: 'smoke', x: (x + 0.5) * TILE, y: (y + 0.5) * TILE, vx: rnd(-20, 20), vy: -30, life: 0.8, size: 8, grow: 16, color: '#9e9e9e' });
+    }
+  }
+  // 솟아오른 땅: 아래에서 흙먼지가 피어오름
+  function riseFx(idx) {
+    for (const i of idx) {
+      const x = i % COLS, y = (i / COLS) | 0;
+      if (Math.random() < 0.6) P.add({ kind: 'smoke', x: (x + 0.5) * TILE + rnd(-8, 8), y: (y + 0.9) * TILE, vx: rnd(-25, 25), vy: rnd(-70, -30), life: rnd(0.6, 1), size: rnd(6, 10), grow: 18, color: '#a1887f' });
+      if (Math.random() < 0.35) P.add({ kind: 'glow', x: (x + Math.random()) * TILE, y: (y + 1) * TILE, vx: 0, vy: rnd(-120, -60), life: 0.6, size: 2, color: '#80d8ff', drag: 1 });
     }
   }
 
@@ -479,6 +487,87 @@ export function createRenderer(canvas) {
     ctx.restore();
   }
 
+  // ---------- 빛의 문: 바닥에서 솟아오르는 거대한 석문 ----------
+  const portalFx = { rise: 0 };
+  function drawPortal(pt, now, dt) {
+    const [x, y, rise, open, last] = pt;
+    const W = 132, H = 176, k = clamp(rise, 0, 1);
+    const ease = 1 - (1 - k) ** 3;
+    const shown = H * ease;                  // 땅 위로 올라온 높이
+    const shakeX = k < 1 ? rnd(-1.5, 1.5) : 0;
+    ctx.save();
+    // 바닥 균열 · 그림자
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.beginPath(); ctx.ellipse(x, y + 2, W * 0.62, 14, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(20,10,10,.6)'; ctx.lineWidth = 2;
+    ctx.beginPath(); for (let i = 0; i < 7; i++) { const a = (i / 7) * TAU + 0.3; ctx.moveTo(x + Math.cos(a) * 30, y + Math.sin(a) * 8); ctx.lineTo(x + Math.cos(a) * 74, y + Math.sin(a) * 20); } ctx.stroke();
+    // 땅 위로 보이는 만큼만 그림 (아래에서 솟는 느낌)
+    ctx.beginPath(); ctx.rect(x - W, y - H - 60, W * 2, H + 60 + 4); ctx.clip();
+    ctx.translate(x + shakeX, y + (H - shown));
+    const glow = open ? 1 : 0;
+    // 문 안쪽 (열리면 빛)
+    const inW = 70, inH = 126;
+    if (open) {
+      const gr = ctx.createLinearGradient(0, -inH - 20, 0, 0);
+      gr.addColorStop(0, '#fffde7'); gr.addColorStop(0.5, '#ffe082'); gr.addColorStop(1, '#80d8ff');
+      ctx.fillStyle = gr;
+    } else ctx.fillStyle = '#120c1c';
+    ctx.beginPath(); ctx.moveTo(-inW / 2, 0); ctx.lineTo(-inW / 2, -inH + inW / 2); ctx.arc(0, -inH + inW / 2, inW / 2, Math.PI, 0); ctx.lineTo(inW / 2, 0); ctx.closePath(); ctx.fill();
+    if (open) {
+      // 소용돌이 빛
+      ctx.save(); ctx.clip();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 6; i++) {
+        const a = now / 500 + i;
+        ctx.strokeStyle = `rgba(255,255,255,${0.25 + 0.15 * Math.sin(now / 200 + i)})`; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.ellipse(0, -inH / 2 + 4, 10 + i * 6, 18 + i * 9, a * 0.3, a, a + 2.2); ctx.stroke();
+      }
+      ctx.restore();
+    } else if (k >= 1) {
+      // 닫힌 문: 희미한 문양
+      // 닫힌 문: 문틈 사이로 새어 나오는 희미한 빛 (가운데 세로줄)
+      const a = 0.25 + 0.15 * Math.sin(now / 300);
+      ctx.fillStyle = `rgba(179,136,255,${a})`; ctx.fillRect(-1.5, -inH + 8, 3, inH - 10);
+      ctx.fillStyle = 'rgba(255,255,255,.06)'; ctx.fillRect(-inW / 2 + 4, -inH / 2, inW - 8, 2);
+    }
+    // 돌기둥 두 개 + 아치
+    const stone = (px, py, w, h, lit) => {
+      ctx.fillStyle = '#4a4458'; ctx.fillRect(px, py, w, h);
+      ctx.fillStyle = '#6b6480'; ctx.fillRect(px, py, w, 4);
+      ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(px + w - 4, py, 4, h);
+      for (let yy = py + 14; yy < py + h; yy += 16) { ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(px, yy, w, 2); }
+      if (lit) { ctx.fillStyle = `rgba(255,224,130,${0.5 + 0.3 * Math.sin(now / 150 + px)})`; ctx.fillRect(px + w / 2 - 2, py + 10, 4, h - 20); }
+    };
+    stone(-W / 2, -H + 30, 30, H - 30, glow);
+    stone(W / 2 - 30, -H + 30, 30, H - 30, glow);
+    // 아치 (반원 띠)
+    ctx.fillStyle = '#5a536b';
+    ctx.beginPath(); ctx.arc(0, -H + 62, W / 2, Math.PI, 0); ctx.arc(0, -H + 62, W / 2 - 28, 0, Math.PI, true); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#7d7594'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, -H + 62, W / 2 - 1, Math.PI, 0); ctx.stroke();
+    // 아치 돌 이음새
+    ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); for (let i = 1; i < 6; i++) { const a = Math.PI + (i / 6) * Math.PI; ctx.moveTo(Math.cos(a) * (W / 2 - 28), -H + 62 + Math.sin(a) * (W / 2 - 28)); ctx.lineTo(Math.cos(a) * W / 2, -H + 62 + Math.sin(a) * W / 2); } ctx.stroke();
+    // 쐐기돌 보석
+    ctx.fillStyle = open ? '#ffe082' : '#7e57c2';
+    ctx.beginPath(); ctx.moveTo(0, -H + 2); ctx.lineTo(11, -H + 16); ctx.lineTo(0, -H + 30); ctx.lineTo(-11, -H + 16); ctx.closePath(); ctx.fill();
+    // 받침
+    ctx.fillStyle = '#3a3448'; ctx.fillRect(-W / 2 - 8, -8, W + 16, 10);
+    ctx.restore();
+    // 솟아오르는 중: 흙먼지
+    if (k < 1 && Math.random() < 0.6) P.add({ kind: 'smoke', x: x + rnd(-W / 2, W / 2), y: y + rnd(-4, 4), vx: rnd(-40, 40), vy: rnd(-40, -10), life: 0.7, size: rnd(5, 9), grow: 14, color: '#a1887f' });
+    if (open) {
+      // 빛기둥
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const gr = ctx.createRadialGradient(x, y - 60, 10, x, y - 60, 150);
+      gr.addColorStop(0, `rgba(255,236,179,${0.35 + 0.1 * Math.sin(now / 160)})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y - 60, 150, 0, TAU); ctx.fill();
+      const lg = ctx.createLinearGradient(0, y - 420, 0, y);
+      lg.addColorStop(0, 'rgba(255,248,225,0)'); lg.addColorStop(1, 'rgba(255,248,225,.28)');
+      ctx.fillStyle = lg; ctx.fillRect(x - 30, y - 420, 60, 420);
+      ctx.restore();
+      if (Math.random() < 0.5) P.add({ kind: 'glow', x: x + rnd(-28, 28), y: y - rnd(0, 20), vx: 0, vy: rnd(-160, -60), life: 0.9, size: rnd(1.5, 3), color: Math.random() < 0.5 ? '#fff59d' : '#b3e5fc', drag: 0 });
+      label(last ? '모험 완료' : '다음 스테이지', x, y - H - 26, '#fff8e1', 14, { stroke: 4 });
+    } else if (k >= 1) label('증강을 고르면 열려요', x, y - H - 26, '#b39ddb', 13, { stroke: 4 });
+  }
+
   // ---------- 상자 · 아이템 ----------
   function drawChest(c, now) {
     const x = c.x, y = c.y, s = c.big ? 1.4 : 1;
@@ -592,13 +681,6 @@ export function createRenderer(canvas) {
         ctx.beginPath(); ctx.arc(200 + i * 16, 27, cur ? 5 + Math.sin(now / 120) : 5, 0, TAU); ctx.fill();
       }
       label(`${snap.g} G`, 300, 33, '#ffd54f', 15, { align: 'right' });
-      // 레벨 · 경험치
-      ctx.fillStyle = 'rgba(8,6,18,.62)'; roundRect(10, 48, 300, 18, 6); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(60, 54, 242, 6);
-      const k = clamp(snap.xp / snap.xn, 0, 1);
-      const gr = ctx.createLinearGradient(60, 0, 302, 0); gr.addColorStop(0, '#7c4dff'); gr.addColorStop(1, '#00e5ff');
-      ctx.fillStyle = gr; ctx.fillRect(60, 54, 242 * k, 6);
-      label(`Lv ${snap.lv}`, 18, 63, '#b388ff', 13, { align: 'left' });
     } else if (snap.col) {
       label(`콜로세움 · ${snap.col.name}`, 20, 33, '#ffd54f', 16, { align: 'left' });
     }
@@ -730,21 +812,36 @@ export function createRenderer(canvas) {
     const cx = lethal ? lethal.x : VIEW_W / 2, cy = lethal ? lethal.y : VIEW_H / 2;
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * (sx - cx * (z - 1)), dpr * (sy - cy * (z - 1)));
     // 지도 (무너진 단계별로 캐시)
-    const [level, warnRing, warnT] = snap.cl || [1, 0, 0];
-    if (snap.mk) {
-      const key = snap.mk + '|' + level;
-      if (!mapCache.has(key)) { if (mapCache.size > 24) mapCache.clear(); mapCache.set(key, buildMap(snap.mk, level)); }
+    const warns = snap.wn || [];
+    const bigWarn = warns.find((w) => w[4]);
+    const warnT = bigWarn ? bigWarn[0] : 0;
+    if (snap.mk && snap.mp) {
+      const key = snap.mk + '|' + snap.mv;
+      if (!mapCache.has(key)) { if (mapCache.size > 24) mapCache.clear(); mapCache.set(key, buildMap(snap.mp, snap.mk)); }
       curMap = mapCache.get(key);
       ctx.drawImage(curMap.c, 0, 0);
-      // 무너지기 직전 줄: 흔들리고 금이 감
-      if (warnT > 0 && curMap.ringTiles[warnRing]) {
-        const amp = 1 + (1 - warnT / 2.2) * 2.5;
-        for (const [x, y] of curMap.ringTiles[warnRing]) {
+      for (const [wt, wT, fall, rise, big] of warns) {
+        // 솟아오를 자리: 빛나는 테두리가 깜빡이며 차오름
+        const kk = 1 - wt / wT;
+        for (const i of rise) {
+          const x = i % COLS, y = (i / COLS) | 0;
+          ctx.save();
+          ctx.globalAlpha = 0.18 + 0.5 * kk;
+          ctx.fillStyle = curMap.th.floor[(x + y) % 2]; ctx.fillRect(x * TILE + 3, y * TILE + 3, TILE - 6, TILE - 6);
+          ctx.globalAlpha = 0.45 + 0.4 * Math.sin(now / 90 + x + y);
+          ctx.strokeStyle = '#80d8ff'; ctx.lineWidth = 2; ctx.strokeRect(x * TILE + 2, y * TILE + 2, TILE - 4, TILE - 4);
+          ctx.restore();
+          if (Math.random() < 0.02) P.add({ kind: 'glow', x: (x + Math.random()) * TILE, y: (y + 1) * TILE, vx: 0, vy: -50, life: 0.7, size: 2, color: '#80d8ff', drag: 0 });
+        }
+        // 무너질 칸: 흔들리고 금이 감
+        const amp = 1 + kk * 2.5;
+        for (const i of fall) {
+          const x = i % COLS, y = (i / COLS) | 0;
           const ox = rnd(-amp, amp), oy = rnd(-amp, amp);
           ctx.clearRect(x * TILE, y * TILE, TILE, TILE);
           drawVoidTile(x, y, now);
           ctx.drawImage(curMap.c, x * TILE, y * TILE, TILE, TILE, x * TILE + ox, y * TILE + oy, TILE, TILE);
-          ctx.fillStyle = `rgba(255,40,30,${0.12 + 0.12 * Math.sin(now / 60)})`; ctx.fillRect(x * TILE + ox, y * TILE + oy, TILE, TILE);
+          ctx.fillStyle = `rgba(255,40,30,${(big ? 0.12 : 0.3) + 0.12 * Math.sin(now / 60)})`; ctx.fillRect(x * TILE + ox, y * TILE + oy, TILE, TILE);
           ctx.strokeStyle = 'rgba(20,8,8,.7)'; ctx.lineWidth = 1.5;
           const hsh = Math.sin(x * 12.9 + y * 78.2) * 43758.5; const r1 = hsh - Math.floor(hsh);
           ctx.beginPath(); ctx.moveTo(x * TILE + 4 + r1 * 10 + ox, y * TILE + 3 + oy); ctx.lineTo(x * TILE + 16 + ox, y * TILE + 14 + oy); ctx.lineTo(x * TILE + 10 + r1 * 14 + ox, y * TILE + 29 + oy); ctx.moveTo(x * TILE + 16 + ox, y * TILE + 14 + oy); ctx.lineTo(x * TILE + 28 + ox, y * TILE + 10 + r1 * 8 + oy); ctx.stroke();
@@ -767,6 +864,7 @@ export function createRenderer(canvas) {
     for (const h of snap.h) bodies.push({ y: h.y, d: () => drawHero(h, me, snap, now, dt) });
     for (const it of snap.it || []) bodies.push({ y: it[3], d: () => drawItem(it, now) });
     if (snap.sto?.chest) bodies.push({ y: snap.sto.chest.y, d: () => drawChest(snap.sto.chest, now) });
+    if (snap.sto?.pt) bodies.push({ y: snap.sto.pt[1] + 4, d: () => drawPortal(snap.sto.pt, now, dt) });
     for (const f of fxList) if (f.k === 'pillar') bodies.push({ y: f.y + 2, d: () => drawFx(ctx, f, now) });
     bodies.sort((a, b) => a.y - b.y);
     for (const g of ghosts) {

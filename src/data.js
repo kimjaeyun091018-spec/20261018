@@ -91,7 +91,7 @@ export const CHARS = {
     quote: '번개는 같은 곳에 두 번 안 떨어져. 내 화살은 떨어지지.', row: 1, el: 'lightning', role: '원거리 견제', cloth: '#f9a825', color: '#ffe14d', hp: 100, speed: 185, weight: 0.95,
     desc: '꿰뚫는 번개 화살과 뇌전 폭주. 물에 젖은 적에게는 감전 연쇄가 터짐.',
     skills: [
-      { name: '속사', type: 'shot', cd: 0.38, el: null, speed: 680, r: 5, power: 1, dmg: 8, kb: [80, 150], life: 0.8, look: 'arrow' },
+      { name: '속사', type: 'shot', cd: 0.56, el: null, speed: 680, r: 5, power: 1, dmg: 9, kb: [80, 150], life: 0.8, look: 'arrow' },
       { name: '뇌전 관통시', type: 'shot', cd: 2.2, el: 'lightning', speed: 980, r: 7, power: 1.6, dmg: 16, kb: [130, 260], life: 0.75, pierce: 3, look: 'bolt' },
       { name: '섬광 도약', type: 'blink', cd: 4.5, dist: 180, zone: { r: 66, delay: 0.3, dmg: 14, kb: [110, 260], el: 'lightning' } },
       { name: '뇌전 폭주', type: 'stream', cd: 7, el: 'lightning', time: 1.1, every: 0.04, speed: 760, r: 8, spread: 0.1, power: 0.6, dmg: 3, kb: [40, 80], life: 0.42, look: 'spark', slow: 0.6 },
@@ -103,7 +103,7 @@ export const CHARS = {
     quote: '추우면… 말해. 조금만 줄일게.', row: 2, el: 'ice', role: '제어', cloth: '#1e88e5', color: '#81d4fa', hp: 95, speed: 170, weight: 0.9,
     desc: '얼음으로 느리게 하고 3번 쌓이면 꽁꽁. 대지로 깨면 분쇄!',
     skills: [
-      { name: '빙정탄', type: 'shot', cd: 0.42, el: 'ice', speed: 560, r: 7, power: 1, dmg: 7, kb: [70, 130], life: 0.9, look: 'shard' },
+      { name: '빙정탄', type: 'shot', cd: 0.62, el: 'ice', speed: 560, r: 7, power: 1, dmg: 8, kb: [70, 130], life: 0.9, look: 'shard' },
       { name: '삼지 빙창', type: 'shot', cd: 2.4, el: 'ice', speed: 640, r: 8, power: 1.4, dmg: 12, kb: [120, 220], life: 0.8, count: 3, spread: 0.32, pierce: 1, look: 'spear' },
       { name: '서리꽃 개화', type: 'nova', cd: 5, r: 120, dmg: 14, kb: [220, 360], el: 'ice', look: 'frost' },
       { name: '백야의 눈보라', type: 'zone', cd: 8, at: 'aim', range: 380, r: 110, time: 3, tick: 0.3, dmg: 3, kb: [0, 0], el: 'ice', look: 'blizzard', slow: 0.5 },
@@ -139,7 +139,7 @@ export const CHARS = {
     quote: '괜찮아요. 제가 곁에 있을게요.', row: 5, el: 'water', role: '지원', cloth: '#0288d1', color: '#4fc3f7', hp: 110, speed: 175, weight: 1,
     desc: '적을 적시고 아군을 치유. 번개·얼음·불과 엮으면 반응이 터짐.',
     skills: [
-      { name: '성수 방울', type: 'shot', cd: 0.4, el: 'water', speed: 520, r: 8, power: 1, dmg: 7, kb: [80, 140], life: 0.9, look: 'bubble' },
+      { name: '성수 방울', type: 'shot', cd: 0.6, el: 'water', speed: 520, r: 8, power: 1, dmg: 8, kb: [80, 140], life: 0.9, look: 'bubble' },
       { name: '해일의 손길', type: 'shot', cd: 3, el: 'water', speed: 420, r: 26, power: 2.5, dmg: 10, kb: [240, 300], life: 0.9, pierce: 99, look: 'wave' },
       { name: '치유의 샘', type: 'zone', cd: 9, at: 'self', r: 100, time: 3, tick: 0.25, heal: 4, dmg: 0, look: 'heal', follow: true },
       { name: '심해 소용돌이', type: 'zone', cd: 8, at: 'aim', range: 360, r: 100, time: 2.6, tick: 0.25, dmg: 3, kb: [0, 0], el: 'water', pull: 220, look: 'vortex' },
@@ -151,7 +151,7 @@ export const CHARS = {
     quote: '숨 쉬지 마. 조준이 흔들려.', row: 6, el: 'shadow', role: '저격', cloth: '#5e35b1', color: '#9c64ff', hp: 90, speed: 180, weight: 0.9,
     desc: '표식을 남기고 저격으로 터뜨리는 한 방 콤보. (쿠키런 저격수처럼)',
     skills: [
-      { name: '흑요탄', type: 'shot', cd: 0.45, el: 'shadow', speed: 760, r: 6, power: 1, dmg: 8, kb: [70, 120], life: 0.9, look: 'umbral' },
+      { name: '흑요탄', type: 'shot', cd: 0.66, el: 'shadow', speed: 760, r: 6, power: 1, dmg: 10, kb: [70, 120], life: 0.9, look: 'umbral' },
       { name: '일격 저격', type: 'snipe', cd: 3, windup: 0.35, len: 900, width: 10, dmg: 32, kb: [260, 460], el: 'shadow' },
       { name: '연막 이탈', type: 'blink', cd: 5, dist: 200, smoke: true, empower: 1.6 },
       { name: '처형 선고', type: 'markall', cd: 9, range: 520, arc: 1.4, delay: 1.0, dmg: 26, kb: [240, 420], el: 'shadow' },
@@ -163,7 +163,7 @@ export const CHARS = {
     quote: '실험은 실패해도 폭발은 성공이야!', row: 7, el: 'poison', role: '광역', cloth: '#558b2f', color: '#9ccc65', hp: 105, speed: 175, weight: 1,
     desc: '독을 쌓고 한 번에 기폭. 불과 엮으면 독 폭발.',
     skills: [
-      { name: '독침', type: 'shot', cd: 0.36, el: 'poison', speed: 600, r: 5, power: 1, dmg: 6, kb: [60, 110], life: 0.8, look: 'needle' },
+      { name: '독침', type: 'shot', cd: 0.54, el: 'poison', speed: 600, r: 5, power: 1, dmg: 7, kb: [60, 110], life: 0.8, look: 'needle' },
       { name: '초록 플라스크', type: 'shot', cd: 3, el: 'poison', speed: 420, r: 9, power: 1, dmg: 6, kb: [80, 120], life: 0.7, lob: true, look: 'flask', cloud: { r: 85, time: 3, tick: 0.4, dmg: 3 } },
       { name: '연쇄 기폭', type: 'detonate', cd: 6, range: 380, perStack: 7, kb: [160, 300] },
       { name: '대폭발 시약', type: 'shot', cd: 9, el: 'fire', speed: 380, r: 13, power: 3, dmg: 24, kb: [280, 460], life: 0.85, lob: true, look: 'bomb', explode: { r: 110, dmg: 16, kb: [260, 420] } },
@@ -187,7 +187,7 @@ export const CHARS = {
     quote: '하늘이 노했어요. …아, 제가 노한 거예요.', row: 9, el: 'lightning', role: '원거리 광역', cloth: '#d32f2f', color: '#ffe14d', hp: 95, speed: 180, weight: 0.9,
     desc: '따라가는 부적과 하늘에서 떨어지는 낙뢰. 젖은 적이 많을수록 강함.',
     skills: [
-      { name: '뇌신 부적', type: 'shot', cd: 0.45, el: 'lightning', speed: 480, r: 7, power: 1, dmg: 7, kb: [70, 120], life: 1.1, home: 4, look: 'talisman' },
+      { name: '뇌신 부적', type: 'shot', cd: 0.64, el: 'lightning', speed: 480, r: 7, power: 1, dmg: 8, kb: [70, 120], life: 1.1, home: 4, look: 'talisman' },
       { name: '뇌운 결계', type: 'zone', cd: 7, at: 'aim', range: 380, r: 90, time: 2.6, tick: 0.35, dmg: 4, kb: [60, 60], el: 'lightning', look: 'thunderfield' },
       { name: '번개 걸음', type: 'blink', cd: 4, dist: 170, fwd: true, zone: { r: 60, delay: 0.25, dmg: 12, kb: [110, 220], el: 'lightning' } },
       { name: '천벌', type: 'strikes', cd: 10, range: 460, count: 7, every: 0.13, r: 52, dmg: 16, kb: [150, 300], el: 'lightning' },
@@ -211,7 +211,7 @@ export const CHARS = {
     quote: '닻 올려! 전부 쓸어버리자!', row: 11, el: 'water', role: '원거리 화력', cloth: '#1565c0', color: '#4fc3f7', hp: 110, speed: 180, weight: 1.05,
     desc: '권총 연사, 반동으로 밀려나는 대포, 닻을 던져 끌어오기.',
     skills: [
-      { name: '해적 권총', type: 'shot', cd: 0.34, el: null, speed: 820, r: 5, power: 1, dmg: 7, kb: [90, 150], life: 0.7, look: 'bullet' },
+      { name: '해적 권총', type: 'shot', cd: 0.52, el: null, speed: 820, r: 5, power: 1, dmg: 8, kb: [90, 150], life: 0.7, look: 'bullet' },
       { name: '대포 일격', type: 'shot', cd: 3.5, el: 'water', speed: 520, r: 14, power: 3, dmg: 20, kb: [280, 460], life: 1, recoil: 340, look: 'cannonball', explode: { r: 70, dmg: 10, kb: [200, 320] } },
       { name: '닻 낚시', type: 'shot', cd: 5, el: 'water', speed: 560, r: 13, power: 2.5, dmg: 14, kb: [0, 0], life: 0.6, hook: 460, look: 'anchor' },
       { name: '대해일', type: 'shot', cd: 9, el: 'water', speed: 380, r: 30, power: 4, dmg: 14, kb: [300, 380], life: 1.1, pierce: 99, count: 3, spread: 0.5, look: 'wave' },
@@ -250,8 +250,8 @@ export const ENEMIES = {
 // 보스 (assets/bosses.png 40x40: [1, 2, 쓰러짐] × 3)
 export const BOSSES = {
   kingslime: { name: '거대 슬라임 왕', sheet: 0, hp: 900, r: 34, speed: 70, weight: 4, touch: 16, color: '#66bb6a', pats: ['ring', 'jump', 'summon'] },
-  bonelord: { name: '해골 궁수 대장', sheet: 1, hp: 1100, r: 30, speed: 90, weight: 3.5, touch: 14, color: '#e0e0e0', pats: ['volley', 'rain', 'dash'] },
-  golem: { name: '심연의 골렘', sheet: 2, hp: 1500, r: 36, speed: 60, weight: 5, touch: 20, color: '#ff7043', pats: ['laser', 'slam', 'ring'] },
+  bonelord: { name: '해골 궁수 대장', sheet: 1, hp: 1100, r: 30, speed: 90, weight: 3.5, touch: 14, color: '#e0e0e0', pats: ['volley', 'drill', 'rain', 'dash', 'drill'] },
+  golem: { name: '심연의 골렘', sheet: 2, hp: 1500, r: 36, speed: 60, weight: 5, touch: 20, color: '#ff7043', pats: ['laser', 'fissure', 'slam', 'ring', 'fissure'] },
 };
 
 // ---------- 스토리 모드 ----------
@@ -276,11 +276,13 @@ export const STORY = {
   pctPerDmg: 0.8,     // 받은 피해 1당 쌓이는 %
   enemyKb: 1.0,       // 적의 넉백 배율
   respawn: 1.2,
-  collapseAt: 30, bossCollapseAt: 45, collapseEvery: 8, collapseMax: 5,
+  collapseAt: 18, bossCollapseAt: 24, collapseEvery: 10, collapseMax: 5,
 };
 // 땅 무너짐: 시간이 지나면 바깥 줄부터 공허로 (경고 → 붕괴)
 export const COLLAPSE = { warn: 2.2 };
 // 레벨: 처치 경험치는 파티가 함께 모음. 레벨업마다 증강 3개 중 1개 선택
+// 증강을 고르는 스테이지 (장-스테이지, 0부터): 1-1 · 1-3 · 1-5(전설) · 2-3 · 2-5(전설) · 3-3
+export const AUG_STAGES = { '0-0': 1, '0-2': 1, '0-4': 2, '1-2': 1, '1-4': 2, '2-2': 1 };
 export const LEVEL = { need: (lv) => 16 + lv * 12, autoPick: 15 };
 // 아이템 (상자, 콜로세움 보급)
 export const ITEMS = {
@@ -316,7 +318,7 @@ export const AUGMENTS = [
   { id: 'ember', tier: 1, icon: '🔥', name: '불씨', desc: '모든 공격 25% 확률로 화상', b: { ignite: 0.25 } },
   { id: 'frostbite', tier: 1, icon: '❄️', name: '서리 기운', desc: '모든 공격 25% 확률로 둔화', b: { chill: 0.25 } },
   { id: 'greed', tier: 1, icon: '🪙', name: '탐욕의 동전', desc: '골드 +30%', b: { gold: 0.3 } },
-  { id: 'scholar', tier: 1, icon: '📖', name: '학자의 지혜', desc: '경험치 +30%, 아이템을 멀리서 줍기', b: { xp: 0.3, magnet: 1 } },
+  { id: 'scholar', tier: 1, icon: '🧲', name: '자석 손', desc: '아이템을 멀리서 줍기, 골드 +15%', b: { gold: 0.15, magnet: 1 } },
   { id: 'giant', tier: 1, icon: '🗿', name: '거인의 혈통', desc: '몸집·피해 +15%, 훨씬 덜 밀려남, 조금 느려짐', b: { size: 0.2, atk: 0.15, weight: 0.3, spd: -0.06 } },
   { id: 'phoenix', tier: 2, icon: '🐦‍🔥', name: '불사조의 깃털', desc: '목숨 +2, 다시 나타날 때 화염 폭발', b: { rebirth: 1 }, lives: 2 },
   { id: 'twin', tier: 2, icon: '✨', name: '쌍둥이 정령', desc: '강력한 수호 구체 4개', b: { orbs: 4, orbDmg: 6 } },
@@ -351,5 +353,5 @@ export const TREE = [
 ];
 
 // ---------- 콜로세움 (PvP) ----------
-export const COLOSSEUM = { stocks: 3, respawn: 1.8, restart: 4, collapseAt: 35, collapseEvery: 10, collapseMax: 6, itemEvery: 12, winGold: 40 };
+export const COLOSSEUM = { stocks: 3, respawn: 1.8, restart: 4, collapseAt: 28, collapseEvery: 11, collapseMax: 6, itemEvery: 12, winGold: 40 };
 export const TEAM_COLORS = ['#ef5350', '#42a5f5', '#66bb6a', '#ffca28'];

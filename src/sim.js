@@ -1,15 +1,16 @@
 // ============================================================
 //  원소 아레나 — 게임 규칙과 시뮬레이션 (방장이 계산, 화면·네트워크 코드 없음)
 //  · 대난투식: 영웅은 체력 대신 %가 쌓이고, 공허(맵 밖·구덩이)에 떨어지면 목숨 -1
-//  · 시간이 지나면 바깥 줄부터 땅이 무너짐
-//  · 스토리: 처치 경험치로 레벨업 → 증강 3택1, 보스 처치 → 전설 증강
+//  · 시간이 지나면 땅 모양이 바뀜: 무너지고 · 솟아오르고 · 가로↔세로로 뒤틀림
+//  · 스토리: 정해진 스테이지를 깨면 증강 3택1 (보스는 전설), 클리어 후 가운데에 솟은 문으로 다음 스테이지
 // ============================================================
 import {
   TILE, COLS, ROWS, KNOCK, FEEL, DASH, STATUS, REACTIONS, CLASH, CHARS, ENEMIES, BOSSES,
   CHAPTERS, STAGES_PER_CHAPTER, STORY, TREE, COLOSSEUM, TEAM_COLORS, MAX_PLAYERS,
-  COLLAPSE, LEVEL, ITEMS, CHEST_LOOT, COLO_LOOT, AUGMENTS,
+  COLLAPSE, LEVEL, ITEMS, CHEST_LOOT, COLO_LOOT, AUGMENTS, AUG_STAGES,
 } from './data.js';
-import { STORY_ARENAS, BOSS_ARENA, COLOSSEUM_ARENAS } from './maps.js';
+import { COLOSSEUM_ARENAS } from './maps.js';
+import { genStoryMap, fpOf, planShift, shiftTiles, inFp, CORE } from './mapgen.js';
 
 const R_HERO = 12;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -32,7 +33,7 @@ function parseMap(rows) {
   const tiles = applyCollapse(rows, 1).map((r) => r.split(''));
   const spawns = [];
   tiles.forEach((row, ty) => row.forEach((c, tx) => { if (c === 'P') spawns.push({ x: (tx + 0.5) * TILE, y: (ty + 0.5) * TILE }); }));
-  return { rows, tiles, spawns };
+  return { rows, tiles, spawns, ver: 1 };
 }
 export const tileAt = (map, x, y) => {
   const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
@@ -73,7 +74,7 @@ export function createState(mode, hostId, opt = {}) {
   const s = {
     mode, hostId, time: 0, nextId: 1, runId: Math.floor(Math.random() * 1e9),
     heroes: {}, enemies: [], shots: [], zones: [], hazards: [], pending: [], fx: [], items: [],
-    msg: '', msgT: 0, gold: 0, map: null, clp: null,
+    msg: '', msgT: 0, gold: 0, map: null, fp: null, shift: null, warns: [], holes: [], stageN: 0,
     xp: 0, level: 1, kills: 0,
     story: null, colo: null, opt,
   };
@@ -924,7 +925,10 @@ function pickupItems(s, h) {
 //  레벨 · 증강
 // ============================================================
 function giveXp(s, n) {
+  // 레벨업 증강은 없앰 (증강은 정해진 스테이지 클리어 때만). 경험치는 기록용으로만 쌓음
   if (s.mode !== 'story') return;
+  s.xp += n;
+  return;
   const mul = 1 + Math.max(0, ...heroList(s).map((h) => h.b.xp));
   s.xp += n * mul;
   while (s.xp >= LEVEL.need(s.level)) {
@@ -938,7 +942,8 @@ function giveXp(s, n) {
   }
 }
 function offerAug(s, h, tier) {
-  const pool = AUGMENTS.filter((a) => a.tier === tier);
+  const pool = AUGMENTS.filter((a) => a.tier === tier && !h.augs.includes(a.id)); // 같은 증강은 한 번만
+  if (!pool.length) return;
   const opts = [];
   while (opts.length < 3 && opts.length < pool.length) { const a = pool[Math.floor(Math.random() * pool.length)]; if (!opts.includes(a.id)) opts.push(a.id); }
   h.choice = { opts, tier, t: LEVEL.autoPick };
@@ -958,40 +963,74 @@ export function pickAug(s, id, i) { const h = s.heroes[id]; if (h?.choice && i >
 export const choosing = (s) => heroList(s).some((h) => h.choice && !h.bot);
 
 // ============================================================
-//  땅 무너짐
+//  땅 변형: 무너짐 · 솟아오름 · 뒤틀림 · 보스가 뚫는 구멍
+//  warns: { fall:[칸], rise:[칸], t, T, big, fp?, hole?, orig? } — 경고가 끝나면 적용
 // ============================================================
-function initCollapse(s, start, every, max) {
-  s.clp = { level: 1, t: start, every, max, warnRing: 0, warnT: 0 };
+const setTile = (s, i, c) => { s.map.tiles[(i / COLS) | 0][i % COLS] = c; };
+const tileI = (s, i) => s.map.tiles[(i / COLS) | 0][i % COLS];
+function mapChanged(s) {
+  s.map.ver++;
+  s.flowT = 0;
+  for (const it of s.items) if (tileAt(s.map, it.x, it.y) === 'o') it.t = 0;
 }
-function ringHasGround(s, r) {
-  for (let ty = 0; ty < ROWS; ty++) for (let tx = 0; tx < COLS; tx++) if (ringOf(tx, ty) === r && s.map.tiles[ty][tx] !== 'o') return true;
-  return false;
+function initShift(s, start, every) {
+  s.fp = fpOf(s.map.tiles);
+  s.shift = { t: start, every, n: 0 };
+  s.warns = []; s.holes = [];
 }
-function updateCollapse(s, dt) {
-  const c = s.clp;
-  if (!c) return;
-  if (c.warnT > 0) {
-    c.warnT -= dt;
-    if (c.warnT <= 0) {
-      const r = c.warnRing;
-      for (let ty = 0; ty < ROWS; ty++) for (let tx = 0; tx < COLS; tx++) if (ringOf(tx, ty) === r) s.map.tiles[ty][tx] = 'o';
-      c.level = r + 1; c.warnRing = 0; c.t = c.every;
-      fxPush(s, { k: 'collapse', ring: r, t: 1.2, shake: 10 });
-      say(s, '땅이 무너졌다!', 1.2);
-      s.flowT = 0;
-      for (const it of s.items) if (tileAt(s.map, it.x, it.y) === 'o') it.t = 0;
-    }
-    return;
+function applyWarn(s, w) {
+  for (const i of w.fall) setTile(s, i, 'o');
+  for (const i of w.rise) setTile(s, i, w.orig?.[i] ?? '.');
+  if (w.fp) s.fp = w.fp;
+  if (w.hole) s.holes.push({ tiles: w.fall, orig: w.holeOrig, t: w.hole });
+  if (w.fall.length) fxPush(s, { k: 'collapse', tiles: w.fall, t: 1.2, shake: w.big ? 10 : 6 });
+  if (w.rise.length) fxPush(s, { k: 'rise', tiles: w.rise, t: 1, shake: w.big ? 6 : 2 });
+  if (w.big) say(s, w.fall.length && w.rise.length ? '땅이 뒤틀렸다!' : w.fall.length ? '땅이 무너졌다!' : '새 땅이 솟아올랐다!', 1.2);
+  mapChanged(s);
+}
+// 구덩이 뚫기 (보스 기술): 경고 → 구멍 → hole초 뒤 다시 메워짐
+function digHoles(s, idxs, warn, hole) {
+  const fall = [...new Set(idxs)].filter((i) => { const c = tileI(s, i); return c !== 'o' && c !== '#'; });
+  if (!fall.length) return;
+  const holeOrig = {}; for (const i of fall) holeOrig[i] = tileI(s, i) === 'P' ? '.' : tileI(s, i);
+  s.warns.push({ fall, rise: [], t: warn, T: warn, hole, holeOrig });
+}
+function updateMapEvents(s, dt, active) {
+  for (const w of s.warns) { w.t -= dt; if (w.t <= 0) applyWarn(s, w); }
+  s.warns = s.warns.filter((w) => w.t > 0);
+  for (const h of s.holes) {
+    h.t -= dt;
+    if (h.t > 0) continue;
+    const rise = h.tiles.filter((i) => tileI(s, i) === 'o' && inFp(s.fp, i % COLS, (i / COLS) | 0));
+    if (rise.length) s.warns.push({ fall: [], rise, orig: h.orig, t: 0.8, T: 0.8 });
   }
-  c.t -= dt;
-  if (c.t > 0) return;
-  let r = c.level;
-  while (r <= c.max && !ringHasGround(s, r)) r++;
-  if (r > c.max) { c.t = 999; return; }
-  c.level = r;
-  c.warnRing = r; c.warnT = COLLAPSE.warn;
-  fxPush(s, { k: 'crumble', ring: r, t: COLLAPSE.warn });
-  say(s, '⚠ 바깥 땅이 흔들린다!', 1.4);
+  s.holes = s.holes.filter((h) => h.t > 0);
+  const E = s.shift;
+  if (!active || !E) return;
+  E.t -= dt;
+  if (E.t > 0 || s.warns.some((w) => w.big)) return;
+  E.t = E.every;
+  const plan = planShift(s.fp, E.n);
+  if (!plan) return;
+  const { fall, rise } = shiftTiles(s.map.tiles, s.fp, plan.fp);
+  if (!fall.length && !rise.length) { s.fp = plan.fp; return; }
+  E.n++;
+  s.warns.push({ big: true, kind: plan.kind, fall, rise, fp: plan.fp, t: COLLAPSE.warn, T: COLLAPSE.warn });
+  fxPush(s, { k: 'crumble', t: COLLAPSE.warn });
+  say(s, plan.msg, 1.8);
+}
+// 클리어: 가운데 땅을 단단히 (문 · 상자 자리)
+function raiseCore(s) {
+  const rise = [], other = [];
+  for (let y = CORE.y0 - 1; y <= CORE.y1 + 2; y++) for (let x = CORE.x0 - 1; x <= CORE.x1 + 1; x++) {
+    const i = y * COLS + x, c = tileI(s, i);
+    if (c === 'o') rise.push(i); else if (c === '#' || c === '^') other.push(i);
+  }
+  s.warns = s.warns.filter((w) => !w.big);
+  s.holes = [];
+  for (const i of other) setTile(s, i, '.');
+  for (const i of rise) setTile(s, i, '.');
+  if (rise.length || other.length) { fxPush(s, { k: 'rise', tiles: [...rise, ...other], t: 1, shake: 3 }); mapChanged(s); }
 }
 
 // ============================================================
@@ -1276,6 +1315,29 @@ function bossPattern(s, e, pat, t, half) {
     case 'dash': e.act = { type: 'dash', t: 1.25, go: 0.5, a: a0 }; fxPush(s, { k: 'warnline', x: e.x, y: e.y, a: a0, len: 520, w: e.r * 2, t: 0.75 }); break;
     case 'laser': e.act = { type: 'laser', t: 3, T: 3, a: a0 - 1, spin: half ? 1.1 : 0.8 }; break;
     case 'slam': fxPush(s, { k: 'warn', x: e.x, y: e.y, r: 160, t: 0.9 }); s.hazards.push({ x: e.x, y: e.y, r: 160, t: 0.9, dmg: 24 * e.dmgMul, kb: [300, 420], follow: e.id }); break;
+    case 'drill': { // 영웅들 발밑에 구멍 (3x3, 반피 이하면 5칸 십자 더)
+      const idx = [];
+      for (const h of heroList(s).filter(isUnit).slice(0, 4)) {
+        const tx = Math.floor(h.x / TILE), ty = Math.floor(h.y / TILE);
+        for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) idx.push((ty + oy) * COLS + tx + ox);
+        if (half) for (const [ox, oy] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) idx.push((ty + oy) * COLS + tx + ox);
+      }
+      digHoles(s, idx.filter((i) => i >= 0 && i < COLS * ROWS), 1.3, half ? 8 : 6.5);
+      say(s, '⚠ 발밑이 꺼진다!', 1.2);
+      break;
+    }
+    case 'fissure': { // 보스에서 대상 쪽으로 땅이 갈라짐
+      const idx = [], ux = Math.cos(a0), uy = Math.sin(a0);
+      for (let d = e.r + 10; d < 15 * TILE; d += TILE / 2) {
+        const x = e.x + ux * d, y = e.y + uy * d;
+        for (const w of half ? [-1, 0, 1] : [-0.5, 0.5]) {
+          const tx = Math.floor((x - uy * w * TILE) / TILE), ty = Math.floor((y + ux * w * TILE) / TILE);
+          if (tx >= 0 && ty >= 0 && tx < COLS && ty < ROWS) idx.push(ty * COLS + tx);
+        }
+      }
+      digHoles(s, idx, 1.1, 6);
+      break;
+    }
     default:
   }
 }
@@ -1296,12 +1358,12 @@ function updateHazards(s, dt) {
 // ============================================================
 export function startStage(s, ch, st) {
   const boss = st === STAGES_PER_CHAPTER - 1;
-  const idx = (ch * 2 + st) % STORY_ARENAS.length;
-  const rows = boss ? BOSS_ARENA : STORY_ARENAS[idx];
-  s.map = parseMap(rows);
-  s.mapKey = `${boss ? 'B' : 'S'}${idx}-${ch}`;
-  s.story = { ch, st, boss, wave: -1, phase: 'intro', t: 1.4, chest: null, cleared: false, nextT: 0, totalWaves: boss ? 1 : 3, time: 0 };
-  initCollapse(s, boss ? STORY.bossCollapseAt : STORY.collapseAt, STORY.collapseEvery, STORY.collapseMax);
+  const gen = genStoryMap(ch, boss); // 벽·구덩이·가시 무작위
+  s.map = parseMap(gen.rows);
+  s.stageN = (s.stageN || 0) + 1;
+  s.mapKey = `${boss ? 'B' : 'S'}${s.stageN}-${ch}`;
+  s.story = { ch, st, boss, wave: -1, phase: 'intro', t: 1.4, chest: null, portal: null, cleared: false, totalWaves: boss ? 1 : 3, time: 0 };
+  initShift(s, boss ? STORY.bossCollapseAt : STORY.collapseAt, STORY.collapseEvery);
   Object.assign(s, { enemies: [], shots: [], zones: [], hazards: [], pending: [], items: [], flow: null, flowT: 0 });
   for (const h of heroList(s)) {
     if (h.out || !h.alive) { h.out = false; h.alive = true; h.stocks = Math.max(1, h.stocks); h.pct = 0; }
@@ -1330,6 +1392,17 @@ function spawnWave(s) {
     fxPush(s, { k: 'spawnwarn', x: p.x, y: p.y, t: 0.55 + i * 0.12 });
   });
 }
+function nextStage(s) {
+  const S = s.story;
+  if (S.st + 1 < STAGES_PER_CHAPTER) startStage(s, S.ch, S.st + 1);
+  else if (S.ch + 1 < CHAPTERS.length) {
+    // 장이 끝나면 쉬지 않고 다음 장으로 (소울나이트처럼 한 판에 끝까지). 보상: % 회복 + 목숨 +1
+    for (const h of heroList(s)) { h.pct = 0; h.stocks = Math.min(STORY.maxLives, h.stocks + 1); }
+    startStage(s, S.ch + 1, 0);
+    fxPush(s, { k: 'chapter', ch: S.ch + 1, name: CHAPTERS[S.ch + 1].name, t: 2.5 });
+    say(s, `${S.ch + 2}장 「${CHAPTERS[S.ch + 1].name}」 — 목숨 +1, % 회복`, 2.6);
+  } else { S.phase = 'done'; S.t = 99; say(s, '모든 장을 돌파했다!', 99); }
+}
 function updateStory(s, dt) {
   const S = s.story;
   const heroes = heroList(s);
@@ -1337,20 +1410,22 @@ function updateStory(s, dt) {
   if (heroes.length && heroes.every((h) => h.out)) { S.phase = 'fail'; S.t = 99; say(s, '전멸… 다시 도전!', 99); return; }
   S.t -= dt;
   S.time += dt;
-  if (S.phase !== 'clear') updateCollapse(s, dt);
+  updateMapEvents(s, dt, S.phase === 'fight');
   if (S.phase === 'intro') { if (S.t <= 0) { S.phase = 'fight'; S.wave = 0; spawnWave(s); } return; }
   if (S.phase === 'fight') {
     const alive = s.enemies.filter((e) => !e.dead).length + s.pending.filter((q) => q.do === 'spawn').length;
     if (alive > 0) return;
     if (S.wave + 1 < S.totalWaves) { S.wave++; spawnWave(s); return; }
     S.phase = 'clear'; S.cleared = true;
-    s.clp.warnT = 0;
-    let cp = { x: VIEW_CENTER.x, y: VIEW_CENTER.y + 80 };
-    if (!safeFloor(s.map, cp.x, cp.y, 24)) cp = randomFloor(s, 24, null, 0, true);
-    S.chest = { x: cp.x, y: cp.y, open: false, big: S.boss };
+    raiseCore(s);
+    s.hazards = [];
+    S.chest = { x: VIEW_CENTER.x, y: VIEW_CENTER.y + 90, open: false, big: S.boss };
     fxPush(s, { k: 'chestdrop', x: S.chest.x, y: S.chest.y, t: 0.6 });
-    say(s, S.boss ? '보스 처치! 보물 상자를 여세요' : '스테이지 클리어! 상자를 여세요', 2);
-    if (S.boss) for (const h of heroes) h.choiceQ.push(2); // 전설 증강
+    // 가운데 바닥에서 거대한 문이 솟아오름 (증강을 다 고르면 빛이 나며 열림)
+    const last = S.ch === CHAPTERS.length - 1 && S.st === STAGES_PER_CHAPTER - 1;
+    S.portal = { x: VIEW_CENTER.x, y: VIEW_CENTER.y + 14, rise: 0, open: false, last, tier: AUG_STAGES[`${S.ch}-${S.st}`] || 0 };
+    fxPush(s, { k: 'portalrise', x: S.portal.x, y: S.portal.y, t: 1.6, shake: 8 });
+    say(s, S.boss ? '보스 처치! 바닥에서 문이 솟아오른다' : '스테이지 클리어! 바닥에서 문이 솟아오른다', 2);
     return;
   }
   if (S.phase === 'clear') {
@@ -1359,25 +1434,31 @@ function updateStory(s, dt) {
       c.open = true;
       giveGold(s, S.boss ? STORY.bossGold(S.ch) : STORY.chestGold(S.ch, S.st), c.x, c.y - 10);
       const n = (S.boss ? 4 : 2) + Math.floor(Math.random() * 2);
-      for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (i - (n - 1) / 2) * 0.7; dropItem(s, pickWeighted(CHEST_LOOT), c.x, c.y - 6, Math.cos(a) * 170, Math.sin(a) * 120 + 60); }
+      for (let i = 0; i < n; i++) { const a = Math.PI / 2 + (i - (n - 1) / 2) * 0.7; dropItem(s, pickWeighted(CHEST_LOOT), c.x, c.y + 6, Math.cos(a) * 170, Math.sin(a) * 90 + 40); }
       fxPush(s, { k: 'chestopen', x: c.x, y: c.y, big: c.big, t: 1.2, shake: 4 });
-      S.nextT = 4;
     }
-    if (c.open) {
-      if (choosing(s)) return; // 증강 고르는 동안은 기다림
-      S.nextT -= dt;
-      if (S.nextT <= 0) {
-        if (S.st + 1 < STAGES_PER_CHAPTER) startStage(s, S.ch, S.st + 1);
-        else if (S.ch + 1 < CHAPTERS.length) {
-          // 장이 끝나면 쉬지 않고 다음 장으로 (소울나이트처럼 한 판에 끝까지). 보상: % 회복 + 목숨 +1
-          for (const h of heroList(s)) { h.pct = 0; h.stocks = Math.min(STORY.maxLives, h.stocks + 1); }
-          startStage(s, S.ch + 1, 0);
-          fxPush(s, { k: 'chapter', ch: S.ch + 1, name: CHAPTERS[S.ch + 1].name, t: 2.5 });
-          say(s, `${S.ch + 2}장 「${CHAPTERS[S.ch + 1].name}」 — 목숨 +1, % 회복`, 2.6);
-        } else { S.phase = 'done'; S.t = 99; say(s, '모든 장을 돌파했다!', 99); }
+    const P = S.portal;
+    if (P.rise < 1) {
+      P.rise = Math.min(1, P.rise + dt / 1.6);
+      // 문이 다 솟으면 증강 (정해진 스테이지만)
+      if (P.rise >= 1 && P.tier) {
+        for (const h of heroes) h.choiceQ.push(P.tier);
+        say(s, P.tier === 2 ? '전설 증강을 고르면 문이 열린다' : '증강을 고르면 문이 열린다', 2);
       }
     }
+    const waiting = heroes.some((h) => h.choice || h.choiceQ.length);
+    if (!P.open && P.rise >= 1 && !waiting) {
+      P.open = true;
+      fxPush(s, { k: 'portalopen', x: P.x, y: P.y, t: 1.4, shake: 6 });
+      say(s, P.last ? '빛의 문이 열렸다! 들어가면 모험 완료' : '빛의 문이 열렸다! 문 안으로 들어가세요', 2.4);
+    }
+    if (P.open) {
+      const h = heroes.find((u) => isUnit(u) && Math.abs(u.x - P.x) < 26 && u.y > P.y - 26 && u.y < P.y + 12);
+      if (h) { S.phase = 'warp'; S.t = 0.8; fxPush(s, { k: 'warp', x: P.x, y: P.y, who: h.id, t: 0.9 }); }
+    }
+    return;
   }
+  if (S.phase === 'warp' && S.t <= 0) nextStage(s);
 }
 
 // ============================================================
@@ -1388,13 +1469,13 @@ export function startColosseum(s, arena) {
   s.map = parseMap(A.rows);
   s.mapKey = `C${arena}`;
   s.colo = { arena, over: false, winner: null, t: 0, name: A.name, itemT: 8, time: 0 };
-  initCollapse(s, COLOSSEUM.collapseAt, COLOSSEUM.collapseEvery, COLOSSEUM.collapseMax);
+  initShift(s, COLOSSEUM.collapseAt, COLOSSEUM.collapseEvery);
 }
 function updateColosseum(s, dt) {
   const C = s.colo;
   if (!C.over) {
     C.time += dt;
-    updateCollapse(s, dt);
+    updateMapEvents(s, dt, true);
     C.itemT -= dt;
     if (C.itemT <= 0) {
       C.itemT = COLOSSEUM.itemEvery;
@@ -1406,7 +1487,9 @@ function updateColosseum(s, dt) {
   if (C.t > 0) return;
   C.over = false; C.winner = null; C.time = 0; C.itemT = 8;
   s.map = parseMap(COLOSSEUM_ARENAS[C.arena % COLOSSEUM_ARENAS.length].rows);
-  initCollapse(s, COLOSSEUM.collapseAt, COLOSSEUM.collapseEvery, COLOSSEUM.collapseMax);
+  s.colo.restarts = (C.restarts || 0) + 1;
+  s.mapKey = `C${C.arena}.${C.restarts}`;
+  initShift(s, COLOSSEUM.collapseAt, COLOSSEUM.collapseEvery);
   Object.assign(s, { shots: [], zones: [], pending: [], hazards: [], items: [] });
   for (const h of heroList(s)) { respawnHero(s, h); h.stocks = COLOSSEUM.stocks; h.cds = [0, 0, 0, 0]; h.kos = 0; h.buf = {}; }
   say(s, '다시 시작!', 1.4);
@@ -1475,7 +1558,8 @@ const stCode = (u) => {
 export function snapshot(s) {
   return {
     m: s.mode, mk: s.mapKey, t: r1(s.time), rid: s.runId, g: s.gold, lv: s.level, xp: Math.floor(s.xp), xn: LEVEL.need(s.level),
-    cl: s.clp ? [s.clp.level, s.clp.warnRing, r1(s.clp.warnT)] : [1, 0, 0],
+    mv: s.map.ver, mp: s.map.tiles.map((r) => r.join('')),
+    wn: s.warns.map((w) => [r1(w.t), w.T, w.fall, w.rise, w.big ? 1 : 0]),
     h: heroList(s).map((h) => ({
       id: h.id, n: h.name, c: h.char, tm: h.team, col: h.color, x: r1(h.x), y: r1(h.y), a: r1(h.aim),
       p: Math.floor(h.pct), hp_: h.hitPop > 0 ? r1(h.hitPop) : 0, sk: h.stocks, al: h.alive ? 1 : 0, out: h.out ? 1 : 0,
@@ -1492,18 +1576,11 @@ export function snapshot(s) {
     it: s.items.map((it) => [it.id, it.kind, r1(it.x), r1(it.y), r1(it.z), r1(it.t)]),
     fx: s.fx,
     msg: s.msgT > 0 ? s.msg : '',
-    sto: s.story ? { ch: s.story.ch, st: s.story.st, ph: s.story.phase, w: s.story.wave, tw: s.story.totalWaves, boss: s.story.boss, chest: s.story.chest, nt: r1(s.story.nextT), cl: s.story.cleared ? 1 : 0 } : null,
+    sto: s.story ? { ch: s.story.ch, st: s.story.st, ph: s.story.phase, w: s.story.wave, tw: s.story.totalWaves, boss: s.story.boss, chest: s.story.chest, cl: s.story.cleared ? 1 : 0,
+      pt: s.story.portal ? [s.story.portal.x, s.story.portal.y, r1(s.story.portal.rise), s.story.portal.open ? 1 : 0, s.story.portal.last ? 1 : 0] : null } : null,
     col: s.colo ? { over: s.colo.over, win: s.colo.winner, wt: s.colo.winTeam, name: s.colo.name } : null,
   };
 }
-export const mapRowsFor = (key, level = 1) => {
-  if (!key) return null;
-  let rows;
-  if (key[0] === 'C') rows = COLOSSEUM_ARENAS[Number(key.slice(1)) % COLOSSEUM_ARENAS.length].rows;
-  else if (key[0] === 'B') rows = BOSS_ARENA;
-  else rows = STORY_ARENAS[Number(key.slice(1).split('-')[0])];
-  return applyCollapse(rows, level);
-};
 // 테스트·연습용: 적 하나 놓기
 export function debugSpawn(s, kind, x, y, hpMul = 1) {
   const e = ENEMIES[kind] ? makeEnemy(s, kind, x, y, { hp: hpMul, dmg: 0 }) : makeBoss(s, kind, x, y, { hp: hpMul, dmg: 0 });

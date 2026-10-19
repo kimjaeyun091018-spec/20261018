@@ -277,6 +277,9 @@ async function joinGame(code, status) {
         if (m.t !== 's') return;
         const now = performance.now();
         if (g.snap) { g.interval = clamp(now - g.recvT, 30, 120); }
+        // 지도는 바뀔 때·가끔만 옴 → 받아 둔 것을 채워 넣음
+        if (m.s.mp) g.mapRows = { v: m.s.mv, rows: m.s.mp };
+        else if (g.mapRows) { m.s.mp = g.mapRows.rows; m.s.mv = g.mapRows.v; }
         g.prev = g.snap; g.snap = m.s; g.recvT = now;
         clientGold(g, m.s);
       },
@@ -346,7 +349,7 @@ function checkEnd() {
     SV.stat('bestLevel', s.level, true);
     UI.hideAug();
     const where = `${s.story.ch + 1}-${s.story.st + 1}`;
-    UI.result(handlers, { win, title: win ? '모험 완료!' : `${where}에서 전멸…`, gold, combo: me?.maxCombo || 0, level: s.level, augs: me?.augs || [], retry: true,
+    UI.result(handlers, { win, title: win ? '모험 완료!' : `${where}에서 전멸…`, gold, combo: me?.maxCombo || 0, augs: me?.augs || [], retry: true,
       note: (reached > prevBest && !win ? '🏆 최고 기록 갱신! ' : '') + (win ? '모든 장을 돌파했어요! 골드로 새 영웅을 영입해 다시 도전해 보세요.' : '모은 골드는 그대로 받습니다. 다음 모험은 다시 1-1부터!') });
   }
   // 콜로세움: 봇 상대로 이기면 골드 (판마다 한 번)
@@ -403,7 +406,16 @@ function frame(now) {
   g.lastSnap = snap;
   if (g.role === 'host' && g.room) {
     g.sendT -= dt;
-    if (g.sendT <= 0) { g.sendT = 0.05; g.room.broadcast({ t: 's', s: snap }); }
+    if (g.sendT <= 0) {
+      g.sendT = 0.05;
+      // 지도 글자는 바뀐 직후 1.5초 동안 + 3초마다만 보냄 (나머지는 생략)
+      const nowMs = performance.now();
+      const key = snap.mk + '|' + snap.mv;
+      if (key !== g.mapKeySent) { g.mapKeySent = key; g.mapSentAt = nowMs; }
+      const withMap = nowMs - g.mapSentAt < 1500 || nowMs - (g.mapFullAt || 0) > 3000;
+      if (withMap) g.mapFullAt = nowMs;
+      g.room.broadcast({ t: 's', s: withMap ? snap : { ...snap, mp: null } });
+    }
   }
   R.render(snap, g.myId, { aim: !isTouch, frozen, target: findTarget(snap.h.find((h) => h.id === g.myId), snap) });
   const meSnap = snap.h.find((h) => h.id === g.myId);
@@ -460,4 +472,4 @@ try { if (!gAcc && SV.hasLocal(null) && !localStorage.getItem(SEEN_KEY)) localSt
 UI.start(handlers);
 requestAnimationFrame(frame);
 // 디버그·테스트용
-window.__ea = { get game() { return game; }, SIM, SV, startGame, quitGame };
+window.__ea = { get game() { return game; }, SIM, SV, startGame, quitGame, joinGame };

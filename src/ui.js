@@ -120,7 +120,7 @@ export function lobby(h) {
           </div>
         </section>
         <section class="modes">
-          <button class="big story" data-go="story"><b>스토리 모드</b><small>스테이지 돌파 · 레벨 업 증강 · 최대 4명 협동</small></button>
+          <button class="big story" data-go="story"><b>스토리 모드</b><small>스테이지 돌파 · 증강 · 최대 4명 협동</small></button>
           <button class="big colo" data-go="colo"><b>콜로세움</b><small>친구·봇과 대난투식 대전 · 날려서 링아웃</small></button>
           <div class="rowbtns">
             <button data-go="tree">🌳 스킬 트리</button>
@@ -287,7 +287,7 @@ export function story(h) {
     <div class="panel">
       <div class="head"><button class="back">← 뒤로</button><h2>스토리 모드</h2><span class="gold">💰 ${s.gold} G</span></div>
       <p class="sub">모험은 언제나 <b>1-1</b>부터 시작해서, 쓰러지지 않는 한 <b>3-5</b>까지 쉬지 않고 이어집니다.<br>
-      레벨과 증강은 한 판 동안 계속 쌓이고, 전멸하면 처음부터! 모은 골드는 스킬 트리와 영웅 영입에 쓰세요.</p>
+      증강은 한 판 동안 계속 쌓이고, 전멸하면 처음부터! 모은 골드는 스킬 트리와 영웅 영입에 쓰세요.</p>
       <div class="route">${CHAPTERS.map((C, i) => `<div class="rch" style="--f:${C.floor[0]};--w:${C.wallTop}"><b>${i + 1}장</b><small>${C.name}</small><span>${[1, 2, 3, 4, 5].map((n) => `<i class="${n === 5 ? 'boss' : ''} ${best >= i * 5 + n ? 'done' : ''}"></i>`).join('')}</span></div>`).join('<span class="rarrow">▶</span>')}</div>
       <p class="sub center">🏆 최고 기록: <b>${bestTxt}</b> · 완주 ${s.stats.wins || 0}회</p>
       <div class="col">
@@ -385,9 +385,9 @@ export function guide(h) {
       <div class="reacts">${uniq.map((R) => `<div><b style="color:${R.color}">${R.name}</b><small>${combos(R.id)}</small></div>`).join('')}</div>
       <h3>대난투 규칙</h3>
       <p class="sub">영웅은 체력 대신 <b>%</b>가 쌓입니다. %가 높을수록 멀리 날아가고, 맵 밖·구덩이(공허)에 떨어지면 목숨이 하나 줄어요. 목숨을 다 잃으면 탈락!<br>
-      많이 맞은 쪽은 <b>분노</b>로 조금 더 세게 칩니다. 떨어질 만큼 강하게 맞으면 화면이 멈추며 「KO 확정」 연출이 나와요. 시간이 지나면 바깥 땅부터 무너집니다.</p>
+      많이 맞은 쪽은 <b>분노</b>로 조금 더 세게 칩니다. 떨어질 만큼 강하게 맞으면 화면이 멈추며 「KO 확정」 연출이 나와요. 시간이 지나면 땅이 무너지고, 새 땅이 솟고, 가로로 긴 땅이 세로로 뒤틀리기도 해요. 지도의 벽·구덩이·가시는 매번 달라집니다.</p>
       <h3>성장</h3>
-      <p class="sub">스토리에서 적을 처치하면 경험치가 쌓여 <b>레벨 업</b> → 증강 3개 중 1개 선택. 보스를 쓰러뜨리면 <b>전설 증강</b>! 증강은 그 장을 도는 동안 유지됩니다. 상자에서는 골드와 함께 아이템이 나와요.</p>
+      <p class="sub"><b>1-1 · 1-3 · 2-3 · 3-3</b>을 깨면 증강 3개 중 1개, <b>1-5 · 2-5 보스</b>를 쓰러뜨리면 <b>전설 증강</b>! 같은 증강은 한 번만 고를 수 있어요. 스테이지를 깨면 가운데 바닥에서 <b>빛의 문</b>이 솟아오르고, 증강을 고르면 문이 열립니다. 상자에서는 골드와 함께 아이템이 나와요.</p>
       <div class="reacts">${Object.values(ITEMS).map((I) => `<div><b style="color:${I.color}">${I.name}</b><small>${I.desc}</small></div>`).join('')}</div>
       <h3>원소 충돌</h3>
       <p class="sub">투사체끼리 부딪히면 힘이 센 쪽이 이깁니다. 서로 다른 원소면 그 자리에서 충돌 폭발.</p>
@@ -444,7 +444,7 @@ export function showAug(cho, onPick) {
     augKey = key;
     const leg = cho.tier === 2;
     $aug.innerHTML = `<div class="augwrap ${leg ? 'leg' : ''}">
-      <h2>${leg ? '전설 증강' : '레벨 업!'}</h2><p class="sub">하나를 고르세요 <span class="augt"></span></p>
+      <h2>${leg ? '전설 증강' : '스테이지 증강'}</h2><p class="sub">하나를 고르세요 <span class="augt"></span></p>
       <div class="augcards">${cho.o.map((id, i) => { const A = AUGMENTS.find((a) => a.id === id); return `<button class="augcard" data-i="${i}"><span class="aicon">${A.icon}</span><b>${A.name}</b><small>${A.desc}</small><span class="akey">${i + 1}</span></button>`; }).join('')}</div>
     </div>`;
     $aug.querySelectorAll('.augcard').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); sfx('buy'); onPick(Number(b.dataset.i)); }));
