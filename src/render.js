@@ -178,7 +178,7 @@ export function createRenderer(canvas) {
   const anim = new Map();
   const mapCache = new Map();
   let shakeMul = 0.35; // 설정: 0 끔 · 0.35 약하게(기본) · 0.7 보통
-  let shake = 0, flash = 0, flashCol = '#fff', punch = 0, dpr = 1, slowmo = 0;
+  let shake = 0, flash = 0, flashCol = '#fff', punch = 0, dpr = 1, slowmo = 0, quake = 0;
   let lastNow = performance.now();
   let comboPop = 0, lastCombo = 0;
   let curMap = null;
@@ -234,8 +234,10 @@ export function createRenderer(canvas) {
         case 'levelup': banners.push({ text: `LEVEL ${f.lv}`, sub: '레벨 업! 증강을 고르세요', color: '#ffd54f', t: 1.8, max: 1.8 }); break;
         case 'pickup': ui.say(f.x, f.y - 20, f.name, f.color, 16); break;
         case 'augpick': { const A = AUGMENTS.find((a) => a.id === f.aug); if (A) ui.say(f.x, f.y - 50, `${A.icon} ${A.name}`, f.legend ? '#ff9100' : '#ffe082', f.legend ? 22 : 18); break; }
-        case 'collapse': collapseFx(f.tiles || []); break;
-        case 'rise': riseFx(f.tiles || []); break;
+        // 땅이 무너지거나 솟는 순간: 배경·HUD까지 화면 전체가 흔들림
+        case 'collapse': collapseFx(f.tiles || []); quake = Math.max(quake, (f.shake || 9) * 0.9 * shakeMul); break;
+        case 'rise': riseFx(f.tiles || []); quake = Math.max(quake, (f.shake || 7) * 0.9 * shakeMul); break;
+        case 'stageclear': banners.push({ text: f.boss ? 'BOSS CLEAR' : 'STAGE CLEAR', sub: `${f.ch + 1}-${f.st + 1} 클리어!`, color: f.boss ? '#ff9100' : '#ffe082', t: 1.7, max: 1.7 }); break;
         case 'nope': if (f.who === myId) ui.say(f.x, f.y - 46, '건너편에 땅이 없어요!', '#ff8a80', 15); break;
         case 'voidleap': P.burst(f.x, f.y, 14, { kind: 'smoke', color: '#b0bec5', sp: [60, 180], life: [0.3, 0.6], size: [4, 7], grow: 10 }); ui.say(f.x, f.y - 46, '도약!', '#80d8ff', 15); break;
         case 'reflect': P.burst(f.x, f.y, 12, { kind: 'spark', color: ['#ffd54f', '#ff7043', '#ffffff'], sp: [150, 380], life: [0.15, 0.35], size: [2, 3.5] }); ui.say(f.x, f.y - 20, '반사!', '#ffd54f', 14); break;
@@ -903,7 +905,9 @@ export function createRenderer(canvas) {
     let dt = Math.min(0.05, (now - lastNow) / 1000);
     lastNow = now;
     ingest(snap, me);
+    const rawDt = dt;
     if (slowmo > 0) { slowmo -= dt; dt *= 0.35; } // KO 확정: 입자도 느리게
+    else if (snap.sl) dt *= 0.3; // 스테이지 클리어 슬로우
     if (opt.frozen) dt *= 0.15;
     P.update(dt);
     for (const f of fxList) f.t -= dt;
@@ -912,18 +916,21 @@ export function createRenderer(canvas) {
     for (let i = ghosts.length - 1; i >= 0; i--) if (ghosts[i].life <= 0) ghosts.splice(i, 1);
     for (const t of texts) { t.life -= dt; t.vy += t.grav * dt; t.x += t.vx * dt; t.y += t.vy * dt; t.pop = Math.max(0, t.pop - dt * 6); }
     for (let i = texts.length - 1; i >= 0; i--) if (texts[i].life <= 0) texts.splice(i, 1);
-    for (const b of banners) b.t -= dt;
+    for (const b of banners) b.t -= rawDt; // 큰 알림은 슬로우와 상관없이 제 속도로
     for (const r of reacts) r.t -= dt;
     for (const f of flyers) { f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.vr * dt; }
     for (let i = flyers.length - 1; i >= 0; i--) { const f = flyers[i]; if (f.t > 1.4 || f.x < -200 || f.x > VIEW_W + 200 || f.y < -200 || f.y > VIEW_H + 200) flyers.splice(i, 1); }
     for (let i = reacts.length - 1; i >= 0; i--) if (reacts[i].t <= 0) reacts.splice(i, 1);
     for (let i = banners.length - 1; i >= 0; i--) if (banners[i].t <= 0) banners.splice(i, 1);
     shake = Math.max(0, shake - dt * 55);
+    quake = Math.max(0, quake - dt * 30);
     flash = Math.max(0, flash - dt);
     punch = Math.max(0, punch - dt * 0.25);
     comboPop = Math.max(0, comboPop - dt * 5);
 
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const qx = (Math.random() * 2 - 1) * quake, qy = (Math.random() * 2 - 1) * quake;
+    if (quake > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#05030a'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    ctx.setTransform(dpr, 0, 0, dpr, dpr * qx, dpr * qy);
     ctx.imageSmoothingEnabled = false;
     drawVoid(ctx, now);
     const sx = (Math.random() * 2 - 1) * shake * (opt.shakeMul ?? 1), sy = (Math.random() * 2 - 1) * shake * (opt.shakeMul ?? 1);
@@ -933,7 +940,7 @@ export function createRenderer(canvas) {
     // 확대는 KO 확정 대상 쪽으로
     const lethal = fxList.find((f) => f.k === 'lethal' && f.t > f.life - 0.3);
     const cx = lethal ? lethal.x : cam.x, cy = lethal ? lethal.y : cam.y;
-    ctx.setTransform(dpr, 0, 0, dpr, dpr * sx, dpr * sy);
+    ctx.setTransform(dpr, 0, 0, dpr, dpr * (sx + qx), dpr * (sy + qy));
     applyCam();
     ctx.translate(cx, cy); ctx.scale(z, z); ctx.translate(-cx, -cy);
     // 지도 (무너진 단계별로 캐시)
@@ -1057,7 +1064,7 @@ export function createRenderer(canvas) {
       else label(t.text, 0, 0, t.color, t.size);
       ctx.restore();
     }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, dpr * qx, dpr * qy);
     // 땅 흔들림 경고: 화면 가장자리 붉게
     if (warnT > 0) {
       const a = 0.18 + 0.12 * Math.sin(now / 80);

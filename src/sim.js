@@ -48,7 +48,32 @@ function circleInWall(map, x, y, r) {
       if ((x - cx) ** 2 + (y - cy) ** 2 < r * r) return true;
     }
   }
+  // 구조물 (빛의 문 돌기둥 등): 벽처럼 막음
+  if (map.solids) for (const b of map.solids) {
+    const cx = clamp(x, b.x0, b.x1), cy = clamp(y, b.y0, b.y1);
+    if ((x - cx) ** 2 + (y - cy) ** 2 < r * r) return true;
+  }
   return false;
+}
+// 바깥 공허: 맵 테두리와 이어진 공허 칸 (지도 버전마다 다시 계산)
+function outerVoid(map) {
+  if (map.ovVer === map.ver && map.ov) return map.ov;
+  const ov = new Uint8Array(COLS * ROWS), q = [];
+  const push = (tx, ty) => { const i = ty * COLS + tx; if (ov[i] || map.tiles[ty][tx] !== 'o') return; ov[i] = 1; q.push(i); };
+  for (let tx = 0; tx < COLS; tx++) { push(tx, 0); push(tx, ROWS - 1); }
+  for (let ty = 0; ty < ROWS; ty++) { push(0, ty); push(COLS - 1, ty); }
+  while (q.length) {
+    const i = q.pop(), tx = i % COLS, ty = (i / COLS) | 0;
+    if (tx > 0) push(tx - 1, ty); if (tx < COLS - 1) push(tx + 1, ty);
+    if (ty > 0) push(tx, ty - 1); if (ty < ROWS - 1) push(tx, ty + 1);
+  }
+  map.ov = ov; map.ovVer = map.ver;
+  return ov;
+}
+function isOuterVoid(map, x, y) {
+  const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
+  if (tx < 0 || ty < 0 || tx >= COLS || ty >= ROWS) return true;
+  return map.tiles[ty][tx] === 'o' && !!outerVoid(map)[ty * COLS + tx];
 }
 // 원 전체가 바닥 위에 있는지 (공허·가시·벽 아님)
 function safeFloor(map, x, y, r) {
@@ -368,7 +393,8 @@ function moveBody(s, u, wx, wy, dt) {
     const nx = axis ? u.x : u.x + d, ny = axis ? u.y + d : u.y;
     const wall = circleInWall(s.map, nx, ny, u.r);
     const intoPit = tileAt(s.map, nx, ny) === 'o' && tileAt(s.map, u.x, u.y) !== 'o';
-    if (wall || (intoPit && (!flying || u.boss || u.ai === 'totem'))) {
+    const edgeStop = u.dash && kSpeed < KNOCK.pitSpeed && isOuterVoid(s.map, nx, ny);
+    if (wall || edgeStop || (intoPit && (!flying || u.boss || u.ai === 'totem'))) {
       const kv = axis ? u.kvy : u.kvx;
       if (wall && Math.abs(kv) > 60) {
         if (Math.abs(kv) >= KNOCK.wallHitSpeed) {
@@ -434,14 +460,12 @@ function useSkill(s, h, i) {
   const C = CHARS[h.char];
   let S = C.skills[i];
   if (h.cds[i] > 0 || frozenOrStunned(h) || h.dash || h.chan || h.snipe || h.roll || h.fall > 0 || !h.alive) return;
-  // 긴 돌진: 가는 길에 공허가 있으면, 건너편 착지점이 땅일 때만 뛰어넘어 씀 (아니면 못 씀)
-  let leap = false;
+  // 긴 돌진: 맵 바깥 공허 앞에서는 멈추고, 맵 안쪽 공허는 건너뛸 수 있음 (끝이 공허 위면 떨어짐)
+  let leap = false, dashLen = 0;
   if (S.type === 'dashstrike') {
     const P = dashPath(s, h, Math.cos(h.aim), Math.sin(h.aim), S.dist);
-    if (P.void) {
-      if (!P.safe) { if ((h.nopeT || 0) < s.time) { h.nopeT = s.time + 0.8; fxPush(s, { k: 'nope', x: h.x, y: h.y, who: h.id, t: 0.8 }); } return; }
-      leap = true;
-    }
+    leap = P.void;
+    dashLen = P.edge ? P.len : 0;
   }
   h.cds[i] = cdOf(s, h, i);
   h.atkT = 0.18;
@@ -504,7 +528,7 @@ function useSkill(s, h, i) {
       break;
     }
     case 'dashstrike':
-      h.dash = { vx: ux * (S.dist / S.time), vy: uy * (S.dist / S.time), t: S.time, hit: new Set(), S, i, leap };
+      h.dash = { vx: ux * (S.dist / S.time), vy: uy * (S.dist / S.time), t: dashLen ? Math.max(0.04, S.time * dashLen / S.dist) : S.time, hit: new Set(), S, i, leap, edgeStop: !!dashLen };
       if (leap) fxPush(s, { k: 'voidleap', x: h.x, y: h.y, a: h.aim, t: 0.5 });
       h.inv = Math.max(h.inv, S.time + 0.08);
       fxPush(s, { k: 'dashstart', x: h.x, y: h.y, a: h.aim, el: S.el, look: S.look, len: S.dist, dur: S.time, t: 0.45 });
@@ -573,14 +597,15 @@ function useSkill(s, h, i) {
 }
 // 돌진 경로 살피기: 벽에서 멈추는 곳까지 가며 공허를 지나는지, 끝이 안전한 땅인지
 function dashPath(s, h, ux, uy, L) {
-  let x = h.x, y = h.y, crossed = false;
+  let x = h.x, y = h.y, crossed = false, len = 0, edge = false;
   for (let d = 6; d <= L; d += 6) {
     const nx = h.x + ux * d, ny = h.y + uy * d;
     if (circleInWall(s.map, nx, ny, h.r)) break;
-    x = nx; y = ny;
+    if (isOuterVoid(s.map, nx, ny)) { edge = true; break; } // 맵 바깥쪽: 떨어지기 전에 멈춤
+    x = nx; y = ny; len = d;
     if (tileAt(s.map, x, y) === 'o') crossed = true;
   }
-  return { void: crossed, safe: safeFloor(s.map, x, y, h.r * 0.7), x, y };
+  return { void: crossed, edge, len, safe: safeFloor(s.map, x, y, h.r * 0.7), x, y };
 }
 // 되받아치기: 가까운 적 투사체를 내 것으로 바꿔 가장 가까운 적에게 (없으면 반대로)
 function reflectNear(s, h, S) {
@@ -839,7 +864,7 @@ function updateHero(s, h, inp, dt) {
       if (D.S.resetOnHit) h.cds[D.i] = Math.min(h.cds[D.i], D.S.resetOnHit);
     }
     if (D.t <= 0) {
-      h.dash = null; h.kvx = D.vx * 0.15; h.kvy = D.vy * 0.15;
+      h.dash = null; h.kvx = D.edgeStop ? 0 : D.vx * 0.15; h.kvy = D.edgeStop ? 0 : D.vy * 0.15;
       if (D.S.land) {
         const L = D.S.land;
         for (const t of foesOf(s, h.team)) if (dist(t, h) < L.r + t.r) hit(s, t, { dmg: L.dmg, kb: L.kb, el: D.S.el, ux: t.x - h.x || 1, uy: t.y - h.y, by: h });
@@ -1661,6 +1686,20 @@ function spawnWave(s) {
 }
 // 빛의 문으로 빨려 들어가는 시간
 const WARP_T = 1.3;
+// 빛의 문 돌기둥: 벽처럼 막아서 가운데 구멍으로만 지나갈 수 있음
+function portalSolids(s, P, heroes) {
+  if (P.rise < 0.35 || s.map.solids) return;
+  s.map.solids = [
+    { x0: P.x - 66, x1: P.x - 36, y0: P.y - 20, y1: P.y + 2 },
+    { x0: P.x + 36, x1: P.x + 66, y0: P.y - 20, y1: P.y + 2 },
+  ];
+  // 솟아오른 기둥 자리에 서 있던 영웅은 바깥쪽으로 밀어냄
+  for (const u of [...heroes, ...s.allies || []]) {
+    if (!u || !circleInWall(s.map, u.x, u.y, u.r)) continue;
+    const sg = u.x < P.x - 51 || (u.x > P.x && u.x < P.x + 51) ? -1 : 1;
+    for (let k = 0; k < 40 && circleInWall(s.map, u.x, u.y, u.r); k++) u.x += sg * 3;
+  }
+}
 function nextStage(s) {
   const S = s.story;
   if (S.st + 1 < STAGES_PER_CHAPTER) startStage(s, S.ch, S.st + 1);
@@ -1687,6 +1726,9 @@ function updateStory(s, dt) {
     if (alive > 0) return;
     if (S.wave + 1 < S.totalWaves) { S.wave++; spawnWave(s); return; }
     S.phase = 'clear'; S.cleared = true;
+    // 마지막 적 처치: 잠깐 전체 슬로우 + 클리어 표시
+    s.slowT = 1.1;
+    fxPush(s, { k: 'stageclear', boss: !!S.boss, ch: S.ch, st: S.st, t: 2.2 });
     s.clears = (s.clears || 0) + 1; if (S.boss) s.bossClears = (s.bossClears || 0) + 1;
     raiseCore(s);
     s.hazards = [];
@@ -1696,7 +1738,7 @@ function updateStory(s, dt) {
     const last = S.ch === CHAPTERS.length - 1 && S.st === STAGES_PER_CHAPTER - 1;
     S.portal = { x: VIEW_CENTER.x, y: VIEW_CENTER.y + 14, rise: 0, open: false, last, tier: AUG_STAGES[`${S.ch}-${S.st}`] || 0 };
     fxPush(s, { k: 'portalrise', x: S.portal.x, y: S.portal.y, t: 1.6, shake: 8 });
-    say(s, S.boss ? '보스 처치! 바닥에서 문이 솟아오른다' : '스테이지 클리어! 바닥에서 문이 솟아오른다', 2);
+    say(s, '바닥에서 문이 솟아오른다', 2);
     return;
   }
   if (S.phase === 'clear') {
@@ -1709,6 +1751,7 @@ function updateStory(s, dt) {
       fxPush(s, { k: 'chestopen', x: c.x, y: c.y, big: c.big, t: 1.2, shake: 4 });
     }
     const P = S.portal;
+    portalSolids(s, P, heroes);
     if (P.rise < 1) {
       P.rise = Math.min(1, P.rise + dt / 1.6);
       // 문이 다 솟으면 증강 (정해진 스테이지만)
@@ -1805,6 +1848,7 @@ export function botInput(s, h) {
 //  한 틱
 // ============================================================
 export function step(s, inputs, dt) {
+  if (s.slowT > 0) { s.slowT -= dt; dt *= 0.3; } // 스테이지 클리어 슬로우
   s.time += dt;
   s.msgT = Math.max(0, s.msgT - dt);
   for (const h of heroList(s)) updateHero(s, h, h.bot ? botInput(s, h) : (inputs[h.id] || {}), dt);
@@ -1834,7 +1878,7 @@ const stCode = (u) => {
 export function snapshot(s) {
   return {
     m: s.mode, mk: s.mapKey, t: r1(s.time), rid: s.runId, g: s.gold, lv: s.level, xp: Math.floor(s.xp), xn: LEVEL.need(s.level),
-    mv: s.map.ver, mp: s.map.tiles.map((r) => r.join('')),
+    sl: s.slowT > 0 ? 1 : 0, mv: s.map.ver, mp: s.map.tiles.map((r) => r.join('')),
     wn: s.warns.map((w) => [r1(w.t), w.T, w.fall, w.rise, w.big ? 1 : 0]),
     h: heroList(s).map((h) => ({
       id: h.id, n: h.name, c: h.char, tm: h.team, col: h.color, x: r1(h.x), y: r1(h.y), a: r1(h.aim),
