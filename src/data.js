@@ -315,8 +315,10 @@ export const GACHA = { luckPer: 0.06, pity: 45, jackpot: 0.04, jackpotGold: [110
 // assets/portraits.png 한 칸 64x64 (캐릭터 순서대로 가로)
 export const HERO_SPRITE = { size: 48, draw: 72, frames: 16, portrait: 64 };
 // 직접 그려 온 촘촘한 도트는 영웅마다 따로 (한 줄 16칸, 칸 크기 cell, 화면 배율 scale). 발끝은 칸 아래에서 2칸 위
+// 기본 도트(heroes.png)를 쓰는 영웅의 화면 크기 배율 (일러스트 영웅들과 키를 맞춤)
+export const HERO_SIZE = { knight: 1.18 };
 export const HERO_SHEETS = {
-  archer: { file: 'hero_archer.png', cell: 72, scale: 1.0 },
+  archer: { file: 'hero_archer.png', cell: 72, scale: 1.12 },
   mage: { file: 'hero_mage.png', cell: 104, scale: 0.78 },
   miko: { file: 'hero_miko.png', cell: 104, scale: 0.78 },
   ninja: { file: 'hero_ninja.png', cell: 128, scale: 0.66 },

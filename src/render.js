@@ -1,7 +1,7 @@
 // ============================================================
 //  원소 아레나 — 화면 그리기 (공허 · 지도 · 캐릭터 · 적 · 아이템 · HUD)
 // ============================================================
-import { TILE, COLS, ROWS, VIEW_W, VIEW_H, CHARS, CHAR_KEYS, ENEMIES, ENEMY_SHEET, BOSSES, CHAPTERS, COLOSSEUM, ITEMS, AUGMENTS, HERO_SPRITE, HERO_SHEETS } from './data.js';
+import { TILE, COLS, ROWS, VIEW_W, VIEW_H, CHARS, CHAR_KEYS, ENEMIES, ENEMY_SHEET, BOSSES, CHAPTERS, COLOSSEUM, ITEMS, AUGMENTS, HERO_SPRITE, HERO_SHEETS, HERO_SIZE } from './data.js';
 import { Particles, drawShot, drawZone, drawFx, spawnFx, elColor } from './fx.js';
 
 const TAU = Math.PI * 2;
@@ -339,8 +339,10 @@ export function createRenderer(canvas) {
     if (own && ready(own.img)) {
       const D = own.cell * own.scale;
       ctx.drawImage(white ? whiteOf(own.img) : own.img, frame * own.cell, 0, own.cell, own.cell, -D / 2, -(own.cell - 2) * own.scale + 12, D, D);
-    } else if (ready(sheet)) ctx.drawImage(white ? whiteOf(sheet) : sheet, frame * HS, C.row * HS, HS, HS, -HD / 2, -HD * 0.792, HD, HD);
-    else { ctx.fillStyle = C.color; ctx.fillRect(-10, -26, 20, 30); }
+    } else if (ready(sheet)) {
+      if (HERO_SIZE[h.c]) { ctx.translate(0, 12); ctx.scale(HERO_SIZE[h.c], HERO_SIZE[h.c]); ctx.translate(0, -12); } // 발끝(+12) 기준으로 키움
+      ctx.drawImage(white ? whiteOf(sheet) : sheet, frame * HS, C.row * HS, HS, HS, -HD / 2, -HD * 0.792, HD, HD);
+    } else { ctx.fillStyle = C.color; ctx.fillRect(-10, -26, 20, 30); }
     ctx.restore();
   }
   function statusFx(x, y, st, now, dt, big = 1) {
