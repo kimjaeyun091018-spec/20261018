@@ -292,7 +292,7 @@ function hit(s, t, opt) {
   if (t.kind === 'hero' && story && t.b.thorns && !opt.thorn && !opt.dot && opt.src && opt.src.kind === 'enemy' && dist(opt.src, t) < 90) {
     hit(s, opt.src, { dmg: t.b.thorns, kb: [80, 60], ux: opt.src.x - t.x, uy: opt.src.y - t.y, by: t, thorn: true, proc: true, noStop: true });
   }
-  if (opt.el && !opt.noReact) applyElement(s, t, opt.el, by);
+  if (opt.el && !opt.noReact) applyElement(s, t, opt.el, by, !!opt.freeze);
   if (t.kind !== 'hero' && t.hp <= 0) killEnemy(s, t, by);
   return true;
 }
@@ -321,9 +321,11 @@ function chainBolt(s, by, from) {
 //  원소 · 반응
 // ============================================================
 const hasStatus = (t, k) => (k === 'frozen' ? t.st.frozen > 0 : t.st[k] && t.st[k].t > 0);
-function applyElement(s, t, el, by) {
+// canFreeze: 얼려도 되는 공격인가 (노엘의 백야의 눈보라만). 아니면 빙결 대신 둔화
+function applyElement(s, t, el, by, canFreeze = false) {
   if (!isUnit(t)) return;
-  const R = REACTIONS.find((r) => r.el === el && hasStatus(t, r.has));
+  let R = REACTIONS.find((r) => r.el === el && hasStatus(t, r.has));
+  if (R?.freeze && !canFreeze) R = { ...R, name: '둔화', freeze: 0, chillR: true };
   if (R && !(t.reactCd > 0)) {
     t.reactCd = 0.35;
     if (R.has === 'frozen') t.st.frozen = 0; else delete t.st[R.has];
@@ -340,7 +342,7 @@ function applyElement(s, t, el, by) {
       const c = t.st.chill || { t: 0, n: 0 };
       c.t = STATUS.chill.time; c.n++;
       t.st.chill = c;
-      if (c.n >= STATUS.chill.freezeAt && !t.boss) { delete t.st.chill; t.st.frozen = 1.2; fxPush(s, { k: 'react', x: t.x, y: t.y, name: '빙결', color: '#b3e5fc', r: 30, t: 0.9, rid: 'freeze' }); }
+      if (canFreeze && c.n >= STATUS.chill.freezeAt && !t.boss) { delete t.st.chill; t.st.frozen = 1.2; fxPush(s, { k: 'react', x: t.x, y: t.y, name: '빙결', color: '#b3e5fc', r: 30, t: 0.9, rid: 'freeze' }); }
       break;
     }
     case 'poison': {
@@ -368,6 +370,9 @@ function triggerReaction(s, t, R, by) {
       if (next.st) next.st.shock = { t: STATUS.shock.time };
       done.add(next.id); cur = next;
     }
+  } else if (R.chillR) {
+    t.st.chill = { t: STATUS.chill.time, n: 1 }; t.slowT = Math.max(t.slowT || 0, 1.6);
+    hit(s, t, hitOpt(t, R.dmg, [0, 0]));
   } else if (R.freeze) {
     t.st.frozen = R.freeze;
     hit(s, t, hitOpt(t, R.dmg, [0, 0]));
@@ -763,7 +768,7 @@ function updateZones(s, dt) {
       if (d > z.r + t.r) continue;
       if (z.S.pull && !t.boss) { t.kvx = (dx / (d || 1)) * z.S.pull * Math.min(1, d / 40); t.kvy = (dy / (d || 1)) * z.S.pull * Math.min(1, d / 40); }
       if (z.S.slow) t.slowT = 0.5;
-      if (z.S.dmg) hit(s, t, { dmg: z.S.dmg, kb: z.S.spin || z.S.kb || [0, 0], el: z.S.el, ux: -dx || rnd(-1, 1), uy: -dy, by, noStop: true });
+      if (z.S.dmg) hit(s, t, { dmg: z.S.dmg, kb: z.S.spin || z.S.kb || [0, 0], el: z.S.el, ux: -dx || rnd(-1, 1), uy: -dy, by, noStop: true, freeze: z.S.freeze });
     }
   }
   s.zones = s.zones.filter((z) => z.t > 0);

@@ -101,12 +101,12 @@ export const CHARS = {
     name: '노엘', title: '서리꽃 마법사', rarity: 'super', price: 6000,
     lore: '만년설 탑에서 자란 소년 마법사. 감정이 북받치면 주변에 눈꽃이 피어난다. 따뜻한 코코아를 제일 좋아한다.',
     quote: '추우면… 말해. 조금만 줄일게.', row: 2, el: 'ice', role: '제어', cloth: '#1e88e5', color: '#81d4fa', hp: 95, speed: 170, weight: 0.9,
-    desc: '얼음으로 느리게 하고 3번 쌓이면 꽁꽁. 대지로 깨면 분쇄!',
+    desc: '얼음으로 느리게 하고, 눈보라 속에서 3번 쌓이면 꽁꽁. 대지로 깨면 분쇄!',
     skills: [
       { name: '빙정탄', type: 'shot', cd: 0.62, el: 'ice', speed: 560, r: 7, power: 1, dmg: 8, kb: [70, 130], life: 0.9, look: 'shard' },
       { name: '삼지 빙창', type: 'shot', cd: 2.4, el: 'ice', speed: 640, r: 8, power: 1.4, dmg: 12, kb: [120, 220], life: 0.8, count: 3, spread: 0.32, pierce: 1, look: 'spear' },
       { name: '서리꽃 개화', type: 'nova', cd: 5, r: 120, dmg: 14, kb: [220, 360], el: 'ice', look: 'frost' },
-      { name: '백야의 눈보라', type: 'zone', cd: 8, at: 'aim', range: 380, r: 110, time: 3, tick: 0.3, dmg: 3, kb: [0, 0], el: 'ice', look: 'blizzard', slow: 0.5 },
+      { name: '백야의 눈보라', type: 'zone', cd: 8, at: 'aim', range: 380, r: 110, time: 3, tick: 0.3, dmg: 3, kb: [0, 0], el: 'ice', look: 'blizzard', slow: 0.5, freeze: true },
     ],
   },
   ninja: {
