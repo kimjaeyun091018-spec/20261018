@@ -174,6 +174,7 @@ export function createRenderer(canvas) {
   const ghosts = [];
   const banners = [];
   const reacts = [];
+  const flyers = [];
   const anim = new Map();
   const mapCache = new Map();
   let shakeMul = 0.35; // 설정: 0 끔 · 0.35 약하게(기본) · 0.7 보통
@@ -214,7 +215,14 @@ export function createRenderer(canvas) {
       if (f.shake && shakeMul > 0 && f.shake >= 6) shake = Math.min(10 * shakeMul, Math.max(shake, f.shake * shakeMul));
       switch (f.k) {
         case 'ko': flash = 0.25; flashCol = '#ffffff'; punch = 0.04; break;
-        case 'die': if (f.boss) { flash = 0.4; punch = 0.05; } break;
+        case 'die':
+          if (f.boss) { flash = 0.4; punch = 0.05; }
+          // 대난투처럼: 쓰러진 적은 맞은 방향(조금 위로)으로 빙글빙글 날아가 화면 밖으로
+          else if (!f.fell && ENEMY_SHEET.includes(f.type)) {
+            let a = f.a; const up = -Math.PI / 2; let d = up - a; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; a += d * 0.3;
+            flyers.push({ type: f.type, x: f.x, y: f.y, vx: Math.cos(a) * 1150, vy: Math.sin(a) * 1150, rot: 0, vr: (Math.random() < 0.5 ? -1 : 1) * rnd(12, 18), t: 0 });
+          }
+          break;
         case 'hit': if (f.crit) { punch = Math.max(punch, 0.015 * shakeMul); shake = Math.max(shake, 8 * shakeMul); } break; // 치명타: 짧고 또렷한 흔들림
         case 'react': punch = Math.max(punch, 0.02 * shakeMul); break;
         case 'lethal': punch = Math.max(punch, f.hero ? 0.09 : 0.045); slowmo = f.hero ? 0.35 : 0.18; flash = f.hero ? 0.22 : 0.1; flashCol = f.hero ? '#e3f2fd' : '#ffffff'; break;
@@ -519,6 +527,22 @@ export function createRenderer(canvas) {
       ctx.beginPath(); ctx.arc(x, cy, R, face - ARC * 0.75, face + ARC * 0.75); ctx.stroke();
     }
     ctx.restore();
+  }
+
+  // 날아가는 적: 빙글 돌며 작아지고, 뒤에 하얀 잔상
+  function drawFlyer(f) {
+    const E = ENEMIES[f.type], idx = ENEMY_SHEET.indexOf(f.type);
+    const S = Math.max(36, E.r * 2.9) * Math.max(0.55, 1 - f.t * 0.35);
+    if (!ready(SHEETS.enemies)) return;
+    for (let i = 3; i >= 1; i--) { // 잔상
+      ctx.save(); ctx.globalAlpha = 0.18 * (4 - i) / 3; ctx.translate(f.x - f.vx * 0.018 * i, f.y - f.vy * 0.018 * i); ctx.rotate(f.rot - f.vr * 0.018 * i);
+      ctx.drawImage(whiteOf(SHEETS.enemies), idx * 3 * 24, 0, 24, 24, -S / 2, -S / 2, S, S); ctx.restore();
+    }
+    ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+    ctx.drawImage(SHEETS.enemies, idx * 3 * 24, 0, 24, 24, -S / 2, -S / 2, S, S);
+    if (f.t < 0.12) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - f.t / 0.12; ctx.drawImage(whiteOf(SHEETS.enemies), idx * 3 * 24, 0, 24, 24, -S / 2, -S / 2, S, S); }
+    ctx.restore();
+    if (Math.random() < 0.6) P.add({ kind: 'smoke', x: f.x, y: f.y, vx: 0, vy: 0, life: 0.35, size: 3, grow: 8, color: '#eceff1', alpha: 0.6 });
   }
 
   // ---------- 아군 꼬마 눈사람 ----------
@@ -886,6 +910,8 @@ export function createRenderer(canvas) {
     for (let i = texts.length - 1; i >= 0; i--) if (texts[i].life <= 0) texts.splice(i, 1);
     for (const b of banners) b.t -= dt;
     for (const r of reacts) r.t -= dt;
+    for (const f of flyers) { f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.vr * dt; }
+    for (let i = flyers.length - 1; i >= 0; i--) { const f = flyers[i]; if (f.t > 1.4 || f.x < -200 || f.x > VIEW_W + 200 || f.y < -200 || f.y > VIEW_H + 200) flyers.splice(i, 1); }
     for (let i = reacts.length - 1; i >= 0; i--) if (reacts[i].t <= 0) reacts.splice(i, 1);
     for (let i = banners.length - 1; i >= 0; i--) if (banners[i].t <= 0) banners.splice(i, 1);
     shake = Math.max(0, shake - dt * 55);
@@ -991,6 +1017,7 @@ export function createRenderer(canvas) {
       ctx.restore();
     }
     for (const b of bodies) b.d();
+    for (const f of flyers) drawFlyer(f);
     drawReticle(snap, opt.target, now, dt);
     P.draw(ctx, 'normal');
     const myTeam = snap.h.find((h) => h.id === me)?.tm ?? 1;
@@ -1116,6 +1143,6 @@ export function createRenderer(canvas) {
     if (!nebula) nebula = buildNebula();
     ctx.drawImage(nebula, x * TILE, y * TILE, TILE, TILE, x * TILE, y * TILE, TILE, TILE);
   }
-  function reset() { P.list.length = 0; fxList.length = 0; texts.length = 0; ghosts.length = 0; banners.length = 0; shake = 0; flash = 0; slowmo = 0; }
+  function reset() { flyers.length = 0; P.list.length = 0; fxList.length = 0; texts.length = 0; ghosts.length = 0; banners.length = 0; shake = 0; flash = 0; slowmo = 0; }
   return { render, hooks, particles: P, resize, reset, toWorld, cam, setShake(m) { shakeMul = m; shake = 0; } };
 }

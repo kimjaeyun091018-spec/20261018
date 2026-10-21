@@ -247,6 +247,7 @@ function hit(s, t, opt) {
     shake: opt.dot ? 0 : Math.min(FEEL.shakeMax, dmg * FEEL.shakePerDmg * (opt.react ? 1.6 : 1)), ux: opt.ux || 0, uy: opt.uy || 0 });
   // 누가 마지막으로 때렸나 (링아웃 점수)
   if (by?.kind === 'hero') { t.lastBy = by.id; t.lastByT = s.time; }
+  if (opt.ux || opt.uy) t.lastA = Math.atan2(opt.uy, opt.ux); // 쓰러질 때 날아갈 방향
   // 콤보 · 증강 효과
   if (by?.kind === 'hero' && !opt.dot) {
     by.combo.n = by.combo.t > 0 ? by.combo.n + 1 : 1;
@@ -1192,7 +1193,7 @@ function killEnemy(s, e, by, fell = false) {
   e.dead = true;
   s.kills++;
   const E = e.boss ? null : ENEMIES[e.type];
-  fxPush(s, { k: 'die', x: e.x, y: e.y, type: e.type, boss: !!e.boss, fell, t: e.boss ? 1.6 : 0.8, shake: e.boss ? 16 : 3 });
+  fxPush(s, { k: 'die', x: e.x, y: e.y, type: e.type, boss: !!e.boss, fell, a: e.lastA ?? -Math.PI / 2, t: e.boss ? 1.6 : 0.8, shake: e.boss ? 16 : 3 });
   if (s.mode === 'story') {
     if (E) { giveGold(s, E.gold + (fell ? 1 : 0), e.x, e.y); giveXp(s, E.xp); if (Math.random() < 0.05 && !fell) dropItem(s, 'potion', e.x, e.y); }
     for (const h of heroList(s)) if (h.b.leech && isUnit(h)) h.pct = Math.max(0, h.pct - h.b.leech);
