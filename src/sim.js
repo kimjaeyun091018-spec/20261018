@@ -1738,12 +1738,11 @@ function updateStory(s, dt) {
     s.clears = (s.clears || 0) + 1; if (S.boss) s.bossClears = (s.bossClears || 0) + 1;
     raiseCore(s);
     s.hazards = [];
-    S.chest = { x: VIEW_CENTER.x, y: VIEW_CENTER.y + 90, open: false, big: S.boss };
-    fxPush(s, { k: 'chestdrop', x: S.chest.x, y: S.chest.y, t: 0.6 });
-    S.portal = null;
+    S.chest = null; S.portal = null; // 문과 보상 상자는 클리어 문구가 사라진 뒤 함께 나타남
     return;
   }
   if (S.phase === 'clear') {
+    if (!S.portal) return; // 클리어 연출 중 (문·상자는 아직)
     const c = S.chest;
     if (!c.open && heroes.some((h) => isUnit(h) && dist(h, c) < 40)) {
       c.open = true;
@@ -1753,7 +1752,6 @@ function updateStory(s, dt) {
       fxPush(s, { k: 'chestopen', x: c.x, y: c.y, big: c.big, t: 1.2, shake: 4 });
     }
     const P = S.portal;
-    if (!P) return; // 클리어 연출 중 (문은 아직)
     portalSolids(s, P, heroes);
     if (P.rise < 1) P.rise = Math.min(1, P.rise + dt / 1.6);
     if (!P.offered && P.rise >= 1) { // 문이 다 솟으면 증강 (정해진 스테이지만)
@@ -1856,6 +1854,8 @@ function raisePortal(s) {
   const last = S.ch === CHAPTERS.length - 1 && S.st === STAGES_PER_CHAPTER - 1;
   S.portal = { x: VIEW_CENTER.x, y: VIEW_CENTER.y + 14, rise: 0, open: false, last, tier: AUG_STAGES[`${S.ch}-${S.st}`] || 0 };
   fxPush(s, { k: 'portalrise', x: S.portal.x, y: S.portal.y, t: 1.6, shake: 8 });
+  S.chest = { x: VIEW_CENTER.x, y: VIEW_CENTER.y + 90, open: false, big: S.boss };
+  fxPush(s, { k: 'chestdrop', x: S.chest.x, y: S.chest.y, t: 0.6 });
   say(s, '문이 솟아올랐다', 2);
 }
 // 클리어 연출 (실제 시간 기준)
