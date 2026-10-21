@@ -215,7 +215,7 @@ export function createRenderer(canvas) {
       switch (f.k) {
         case 'ko': flash = 0.25; flashCol = '#ffffff'; punch = 0.04; break;
         case 'die': if (f.boss) { flash = 0.4; punch = 0.05; } break;
-        case 'hit': if (f.crit) punch = Math.max(punch, 0.015 * shakeMul); break;
+        case 'hit': if (f.crit) { punch = Math.max(punch, 0.015 * shakeMul); shake = Math.max(shake, 8 * shakeMul); } break; // 치명타: 짧고 또렷한 흔들림
         case 'react': punch = Math.max(punch, 0.02 * shakeMul); break;
         case 'lethal': punch = Math.max(punch, f.hero ? 0.09 : 0.045); slowmo = f.hero ? 0.35 : 0.18; flash = f.hero ? 0.22 : 0.1; flashCol = f.hero ? '#e3f2fd' : '#ffffff'; break;
         case 'cast': anim.set(f.who, { t: performance.now(), i: f.i, type: f.type }); break;
