@@ -1732,8 +1732,8 @@ function updateStory(s, dt) {
     if (S.wave + 1 < S.totalWaves) { S.wave++; spawnWave(s); return; }
     S.phase = 'clear'; S.cleared = true;
     // 마지막 적 처치: 잠깐 전체 슬로우 + 클리어 표시
-    s.slowT = 1.1;
-    fxPush(s, { k: 'stageclear', boss: !!S.boss, ch: S.ch, st: S.st, t: 2.2 });
+    s.slowT = 1.6;
+    s.slowEnd = { boss: !!S.boss, ch: S.ch, st: S.st }; // 슬로우가 끝나면 클리어 표시
     s.clears = (s.clears || 0) + 1; if (S.boss) s.bossClears = (s.bossClears || 0) + 1;
     raiseCore(s);
     s.hazards = [];
@@ -1743,7 +1743,6 @@ function updateStory(s, dt) {
     const last = S.ch === CHAPTERS.length - 1 && S.st === STAGES_PER_CHAPTER - 1;
     S.portal = { x: VIEW_CENTER.x, y: VIEW_CENTER.y + 14, rise: 0, open: false, last, tier: AUG_STAGES[`${S.ch}-${S.st}`] || 0 };
     fxPush(s, { k: 'portalrise', x: S.portal.x, y: S.portal.y, t: 1.6, shake: 8 });
-    say(s, '바닥에서 문이 솟아오른다', 2);
     return;
   }
   if (S.phase === 'clear') {
@@ -1853,7 +1852,14 @@ export function botInput(s, h) {
 //  한 틱
 // ============================================================
 export function step(s, inputs, dt) {
-  if (s.slowT > 0) { s.slowT -= dt; dt *= 0.3; } // 스테이지 클리어 슬로우
+  if (s.slowT > 0) { // 스테이지 클리어 슬로우 → 끝나면 클리어 문구
+    s.slowT -= dt; dt *= 0.3;
+    if (s.slowT <= 0 && s.slowEnd) {
+      const E = s.slowEnd; s.slowEnd = null;
+      fxPush(s, { k: 'stageclear', boss: E.boss, ch: E.ch, st: E.st, t: 2 });
+      say(s, '바닥에서 문이 솟아오른다', 2);
+    }
+  }
   s.time += dt;
   s.msgT = Math.max(0, s.msgT - dt);
   for (const h of heroList(s)) updateHero(s, h, h.bot ? botInput(s, h) : (inputs[h.id] || {}), dt);
