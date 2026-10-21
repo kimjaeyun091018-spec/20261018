@@ -460,7 +460,7 @@ HEROES['priest'] = dict(
         '...............QQ...',
     ], pivot=(4, 2)),
     kind='staff', legs=('p', 'o', 'O'), arm='a', glove='a',
-    sprite=dict(file='tools/art/priest.png', cell=104, scale=0.78, weapon_from=(62, 8), pivot=(62, 55), legs=(84, 40), face=(32, 13, 32),
+    sprite=dict(file='tools/art/priest.png', cell=104, scale=0.78, weapon_from=(66, 12), pivot=(65, 54), legs=(84, 44), face=(36, 12, 32),
                 ang=dict(rest=0, windup=-12, strike=8, follow=4, hurt=10, win=-15), push=dict(windup=-1, strike=2, follow=1)),
 )
 
