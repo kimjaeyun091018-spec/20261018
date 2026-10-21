@@ -316,7 +316,7 @@ HEROES['ninja'] = dict(
         'n...VVVV.',
     ], pivot=(1, 1)),
     kind='melee', legs=('p', 'o', 'O'), arm='a', glove='C', reach=4,
-    sprite=dict(file='tools/art/ninja.png', cell=112, scale=0.74, weapon_from=(78, 56), pivot=(78, 62), legs=(80, 52), face=(48, 11, 32),
+    sprite=dict(file='tools/art/ninja.png', cell=128, scale=0.66, weapon_from=(88, 62), pivot=(86, 68), legs=(92, 60), face=(55, 12, 32),
                 ang=dict(rest=0, windup=-30, strike=25, follow=35, hurt=8, win=-20), push=dict(windup=-1, strike=3, follow=2)),
 )
 # 두 번째 단검은 등에 꽂음
