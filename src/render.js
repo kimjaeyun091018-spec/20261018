@@ -220,6 +220,9 @@ export function createRenderer(canvas) {
           // 대난투처럼: 쓰러진 적은 맞은 방향(조금 위로)으로 빙글빙글 날아가 화면 밖으로
           else if (!f.fell && ENEMY_SHEET.includes(f.type)) {
             let a = f.a; const up = -Math.PI / 2; let d = up - a; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; a += d * 0.3;
+            // 날아가기 전 자리에서 폭발 (화면 흔들림 없이)
+            const ex = { k: 'explosion', x: f.x, y: f.y - 6, r: 34 + (ENEMIES[f.type]?.r || 12), el: null, t: 0.45, life: 0.45 };
+            fxList.push(ex); spawnFx(ex, P, ui);
             flyers.push({ type: f.type, x: f.x, y: f.y, vx: Math.cos(a) * 1150, vy: Math.sin(a) * 1150, rot: 0, vr: (Math.random() < 0.5 ? -1 : 1) * rnd(12, 18), t: 0 });
           }
           break;
