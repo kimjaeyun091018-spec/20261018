@@ -1073,8 +1073,8 @@ function applyWarn(s, w) {
   for (const i of w.rise) setTile(s, i, w.orig?.[i] ?? '.');
   if (w.fp) s.fp = w.fp;
   if (w.hole) s.holes.push({ tiles: w.fall, orig: w.holeOrig, t: w.hole });
-  if (w.fall.length) fxPush(s, { k: 'collapse', tiles: w.fall, t: 1.2, shake: w.big ? 10 : 6 });
-  if (w.rise.length) fxPush(s, { k: 'rise', tiles: w.rise, t: 1, shake: w.big ? 6 : 2 });
+  if (w.fall.length) fxPush(s, { k: 'collapse', tiles: w.fall, t: 1.2, shake: w.big ? 16 : 9 });
+  if (w.rise.length) fxPush(s, { k: 'rise', tiles: w.rise, t: 1, shake: w.big ? 13 : 7 });
   if (w.big) say(s, w.fall.length && w.rise.length ? '땅이 뒤틀렸다!' : w.fall.length ? '땅이 무너졌다!' : '새 땅이 솟아올랐다!', 1.2);
   mapChanged(s);
 }
@@ -1120,7 +1120,7 @@ function raiseCore(s) {
   s.holes = [];
   for (const i of other) setTile(s, i, '.');
   for (const i of rise) setTile(s, i, '.');
-  if (rise.length || other.length) { fxPush(s, { k: 'rise', tiles: [...rise, ...other], t: 1, shake: 3 }); mapChanged(s); }
+  if (rise.length || other.length) { fxPush(s, { k: 'rise', tiles: [...rise, ...other], t: 1, shake: 8 }); mapChanged(s); }
 }
 
 // ============================================================

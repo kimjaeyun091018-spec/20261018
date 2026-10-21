@@ -940,6 +940,8 @@ export function createRenderer(canvas) {
     const warns = snap.wn || [];
     const bigWarn = warns.find((w) => w[4]);
     const warnT = bigWarn ? bigWarn[0] : 0;
+    // 땅이 무너지기·솟기 직전: 점점 커지는 땅울림
+    if (bigWarn && warnT < 1.2) shake = Math.max(shake, (1.2 - warnT) * 5 * shakeMul);
     if (snap.mk && snap.mp) {
       const key = snap.rid + '|' + snap.mk + '|' + snap.mv;
       if (!mapCache.has(key)) { if (mapCache.size > 24) mapCache.clear(); mapCache.set(key, buildMap(snap.mp, snap.mk)); }
