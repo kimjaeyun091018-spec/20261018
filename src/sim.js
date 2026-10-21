@@ -174,6 +174,7 @@ const alliesOf = (s, team) => heroList(s).filter((h) => h.team === team && isUni
 //  피격 (타격감의 중심)
 //  opt: dmg, kb[base, growth], el, ux, uy, by, noReact, noStop, dot, basic, react, thorn
 // ============================================================
+export const comboBonus = (h) => Math.min(0.5, Math.floor((h.combo?.n || 0) / 10) * 0.01);
 function hit(s, t, opt) {
   if (!isUnit(t) || (t.inv > 0 && !opt.dot)) return false;
   const by = opt.by || null;
@@ -187,6 +188,8 @@ function hit(s, t, opt) {
       if (Math.random() < by.b.crit) { crit = true; dmg *= 1 + by.b.critDmg; }
       if (opt.react) dmg *= 1 + by.b.react;
     }
+    // 콤보 보너스: 10콤보마다 피해 +1% (최대 +50%)
+    dmg *= 1 + comboBonus(by);
     if (by.buf.power > 0) dmg *= 1.35;
     if (by.empower > 0 && opt.basic) { dmg *= CHARS.sniper.skills[2].empower; by.empower = 0; }
   }

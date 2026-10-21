@@ -226,7 +226,7 @@ export function createRenderer(canvas) {
             flyers.push({ type: f.type, x: f.x, y: f.y, vx: Math.cos(a) * 1150, vy: Math.sin(a) * 1150, rot: 0, vr: (Math.random() < 0.5 ? -1 : 1) * rnd(12, 18), t: 0 });
           }
           break;
-        case 'hit': if (f.crit) { punch = Math.max(punch, 0.015 * shakeMul); shake = Math.max(shake, 8 * shakeMul); } break; // 치명타: 짧고 또렷한 흔들림
+        case 'hit': if (f.crit) { punch = Math.max(punch, 0.015 * shakeMul); shake = Math.max(shake, 12 * shakeMul); } break; // 치명타: 짧고 또렷한 흔들림
         case 'react': punch = Math.max(punch, 0.02 * shakeMul); break;
         case 'lethal': punch = Math.max(punch, f.hero ? 0.09 : 0.045); slowmo = f.hero ? 0.35 : 0.18; flash = f.hero ? 0.22 : 0.1; flashCol = f.hero ? '#e3f2fd' : '#ffffff'; break;
         case 'cast': anim.set(f.who, { t: performance.now(), i: f.i, type: f.type }); break;
@@ -855,13 +855,14 @@ export function createRenderer(canvas) {
       const col = meH.cb >= 50 ? '#ff1744' : meH.cb >= 25 ? '#ff9100' : meH.cb >= 10 ? '#ffd54f' : '#ffffff';
       label(String(meH.cb), 0, 0, col, 46);
       label('COMBO', 0, 22, '#ffe0b2', 16);
+      if (meH.cb >= 10) label(`피해 +${Math.min(50, Math.floor(meH.cb / 10))}%`, 0, 40, '#ffab91', 13);
       ctx.restore();
     }
     lastCombo = meH ? meH.cb : 0;
     // 원소 반응 목록 (콤보 아래)
     reacts.forEach((r, i) => {
       ctx.save(); ctx.globalAlpha = clamp(r.t, 0, 1) * (i === 0 ? 1 : 0.75);
-      label(r.text, VIEW_W - 22, 236 + i * 22, r.color, i === 0 ? 18 : 15, { align: 'right', strokeColor: '#1a0b2e', stroke: 5 });
+      label(r.text, VIEW_W - 22, 258 + i * 22, r.color, i === 0 ? 18 : 15, { align: 'right', strokeColor: '#1a0b2e', stroke: 5 });
       ctx.restore();
     });
     // 큰 알림 (레벨 업 등)
