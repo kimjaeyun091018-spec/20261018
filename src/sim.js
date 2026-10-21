@@ -1733,7 +1733,7 @@ function updateStory(s, dt) {
     S.phase = 'clear'; S.cleared = true;
     // 마지막 적 처치: 잠깐 전체 슬로우 + 클리어 표시
     s.slowT = 1.6;
-    s.slowEnd = { boss: !!S.boss, ch: S.ch, st: S.st }; // 슬로우가 끝나면 클리어 표시
+    s.slowEnd = { boss: !!S.boss, ch: S.ch, st: S.st, wait: 1.2 }; // 슬로우가 끝나면 클리어 표시
     s.clears = (s.clears || 0) + 1; if (S.boss) s.bossClears = (s.bossClears || 0) + 1;
     raiseCore(s);
     s.hazards = [];
@@ -1756,16 +1756,16 @@ function updateStory(s, dt) {
     }
     const P = S.portal;
     portalSolids(s, P, heroes);
-    if (P.rise < 1) {
-      P.rise = Math.min(1, P.rise + dt / 1.6);
-      // 문이 다 솟으면 증강 (정해진 스테이지만)
-      if (P.rise >= 1 && P.tier) {
+    if (P.rise < 1) P.rise = Math.min(1, P.rise + dt / 1.6);
+    if (!P.offered && P.rise >= 1 && !s.slowEnd && s.time - (s.clearShownT || 0) > 1.6) { // 문이 다 솟고 클리어 문구가 뜬 뒤 증강 (정해진 스테이지만)
+      P.offered = true;
+      if (P.tier) {
         for (const h of heroes) h.choiceQ.push(P.tier);
         say(s, P.tier === 2 ? '전설 증강을 고르면 문이 열린다' : '증강을 고르면 문이 열린다', 2);
       }
     }
     const waiting = heroes.some((h) => h.choice || h.choiceQ.length);
-    if (!P.open && P.rise >= 1 && !waiting) {
+    if (!P.open && P.offered && !waiting) {
       P.open = true;
       fxPush(s, { k: 'portalopen', x: P.x, y: P.y, t: 1.4, shake: 6 });
       say(s, P.last ? '빛의 문이 열렸다! 들어가면 모험 완료' : '빛의 문이 열렸다! 문 안으로 들어가세요', 2.4);
@@ -1852,13 +1852,12 @@ export function botInput(s, h) {
 //  한 틱
 // ============================================================
 export function step(s, inputs, dt) {
-  if (s.slowT > 0) { // 스테이지 클리어 슬로우 → 끝나면 클리어 문구
-    s.slowT -= dt; dt *= 0.3;
-    if (s.slowT <= 0 && s.slowEnd) {
-      const E = s.slowEnd; s.slowEnd = null;
-      fxPush(s, { k: 'stageclear', boss: E.boss, ch: E.ch, st: E.st, t: 2 });
-      say(s, '바닥에서 문이 솟아오른다', 2);
-    }
+  if (s.slowT > 0) { s.slowT -= dt; dt *= 0.3; } // 스테이지 클리어 슬로우
+  // 슬로우가 끝나고 1.2초 뒤에 클리어 문구
+  else if (s.slowEnd && (s.slowEnd.wait -= dt) <= 0) {
+    const E = s.slowEnd; s.slowEnd = null; s.clearShownT = s.time;
+    fxPush(s, { k: 'stageclear', boss: E.boss, ch: E.ch, st: E.st, t: 2 });
+    say(s, '바닥에서 문이 솟아오른다', 2);
   }
   s.time += dt;
   s.msgT = Math.max(0, s.msgT - dt);
@@ -1946,7 +1945,7 @@ export function runSummary(s, id) {
   if (h.choice) pendingAug.push(h.choice.tier);
   pendingAug.push(...h.choiceQ);
   if (S.cleared) {
-    if (S.portal && !S.portal.open && S.portal.rise < 1 && S.portal.tier) pendingAug.push(S.portal.tier);
+    if (S.portal && !S.portal.open && !S.portal.offered && S.portal.tier) pendingAug.push(S.portal.tier);
     if (st + 1 < STAGES_PER_CHAPTER) st++;
     else if (ch + 1 < CHAPTERS.length) { ch++; st = 0; }
     else return null;
