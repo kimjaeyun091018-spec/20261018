@@ -234,7 +234,7 @@ export function createRenderer(canvas) {
         case 'levelup': banners.push({ text: `LEVEL ${f.lv}`, sub: '레벨 업! 증강을 고르세요', color: '#ffd54f', t: 1.8, max: 1.8 }); break;
         case 'pickup': ui.say(f.x, f.y - 20, f.name, f.color, 16); break;
         case 'augpick': { const A = AUGMENTS.find((a) => a.id === f.aug); if (A) ui.say(f.x, f.y - 50, `${A.icon} ${A.name}`, f.legend ? '#ff9100' : '#ffe082', f.legend ? 22 : 18); break; }
-        // 땅이 무너지거나 솟는 순간: 배경·HUD까지 화면 전체가 흔들림
+        // 땅이 무너지거나 솟는 순간: 배경까지 화면 전체가 흔들림 (HUD는 고정)
         case 'collapse': collapseFx(f.tiles || []); quake = Math.max(quake, (f.shake || 9) * 0.9 * shakeMul); break;
         case 'rise': riseFx(f.tiles || []); quake = Math.max(quake, (f.shake || 7) * 0.9 * shakeMul); break;
         case 'stageclear': banners.push({ text: f.boss ? 'BOSS CLEAR' : 'STAGE CLEAR', sub: `${f.ch + 1}-${f.st + 1} 클리어!`, color: f.boss ? '#ff9100' : '#ffe082', t: 1.7, max: 1.7 }); break;
@@ -1064,7 +1064,7 @@ export function createRenderer(canvas) {
       else label(t.text, 0, 0, t.color, t.size);
       ctx.restore();
     }
-    ctx.setTransform(dpr, 0, 0, dpr, dpr * qx, dpr * qy);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // HUD는 흔들리지 않음
     // 땅 흔들림 경고: 화면 가장자리 붉게
     if (warnT > 0) {
       const a = 0.18 + 0.12 * Math.sin(now / 80);
