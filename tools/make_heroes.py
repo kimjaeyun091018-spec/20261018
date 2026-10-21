@@ -397,6 +397,9 @@ def main():
     sheet.save(ROOT / 'assets' / 'heroes.png')
     ports.save(ROOT / 'assets' / 'portraits.png')
     print('saved', sheet.size, ports.size)
+    # 프로필은 인게임 그림에서 같은 비율로 다시 잘라 냄 (얼굴 크기 맞춤)
+    import make_portraits
+    make_portraits.main()
 
 
 if __name__ == '__main__':
