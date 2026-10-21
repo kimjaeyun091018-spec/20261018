@@ -1,5 +1,5 @@
 // 메뉴 화면들 (DOM)
-import { CHARS, CHAR_KEYS, ELEMENTS, TREE, CHAPTERS, REACTIONS, HERO_SPRITE, HERO_SHEETS, AUGMENTS, ITEMS, RARITY, RARITY_ORDER, BOXES, GACHA, HERO_LV, heroStats, STAT_NAMES, ACCOUNT, ACHIEVEMENTS } from './data.js';
+import { CHARS, CHAR_KEYS, ELEMENTS, TREE, CHAPTERS, REACTIONS, HERO_SPRITE, HERO_SHEETS, HERO_SIZE, AUGMENTS, ITEMS, RARITY, RARITY_ORDER, BOXES, GACHA, HERO_LV, heroStats, STAT_NAMES, ACCOUNT, ACHIEVEMENTS } from './data.js';
 import { COLOSSEUM_ARENAS } from './maps.js';
 import * as SV from './save.js';
 import * as SIM from './sim.js';
@@ -50,12 +50,15 @@ function animPortraits(t) {
       const cyc = Math.floor(t / 140) % 14;
       const f = on && cyc >= 10 ? 10 + Math.min(2, cyc - 10) : Math.floor(t / 230) % 4;
       const own = OWN[c.dataset.char];
+      // 인게임과 같은 비율로, 발끝을 맞춰 그림 (모든 영웅 키가 같아 보이게 · 칸 안에 들어오게 살짝 줄임)
+      const gp = (c.width / HERO_SPRITE.draw) * 0.86, feet = c.height * 0.95;
       if (own && own.img.complete && own.img.naturalWidth) {
-        // 발끝 기준으로 맞춰서 기본 영웅과 같은 크기로 보이게
-        const k = (c.width / HS) * (own.scale / HERO_SPRITE.draw * HS);
-        const D = own.cell * k;
-        g.drawImage(own.img, f * own.cell, 0, own.cell, own.cell, (c.width - D) / 2, c.height * (46 / 48) - (own.cell - 2) * k, D, D);
-      } else if (heroes.complete) g.drawImage(heroes, f * HS, C.row * HS, HS, HS, 0, 0, c.width, c.height);
+        const k = own.scale * gp, D = own.cell * k;
+        g.drawImage(own.img, f * own.cell, 0, own.cell, own.cell, (c.width - D) / 2, feet - (own.cell - 2) * k, D, D);
+      } else if (heroes.complete) {
+        const D = HERO_SPRITE.draw * gp * (HERO_SIZE[c.dataset.char] || 1);
+        g.drawImage(heroes, f * HS, C.row * HS, HS, HS, (c.width - D) / 2, feet - D * (46 / 48), D, D);
+      }
     }
     if (locked) { g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(10,8,20,.55)'; g.fillRect(0, 0, c.width, c.height); g.globalCompositeOperation = 'source-over'; }
   }
