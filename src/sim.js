@@ -1657,7 +1657,7 @@ export function startStage(s, ch, st, preset = null) {
   s.mapKey = `${boss ? 'B' : 'S'}${s.stageN}-${ch}`;
   s.story = { ch, st, boss, wave: -1, phase: 'intro', t: 1.4, chest: null, portal: null, cleared: false, totalWaves: boss ? 1 : 3, time: 0 };
   initShift(s, boss ? STORY.bossCollapseAt : STORY.collapseAt, STORY.collapseEvery);
-  Object.assign(s, { enemies: [], shots: [], zones: [], hazards: [], pending: [], items: [], flow: null, flowT: 0, ice: new Map() });
+  Object.assign(s, { enemies: [], shots: [], zones: [], hazards: [], pending: [], items: [], flow: null, flowT: 0, ice: new Map(), clearSeq: null, slowT: 0 });
   for (const h of heroList(s)) {
     if (h.out || !h.alive) { h.out = false; h.alive = true; h.stocks = Math.max(1, h.stocks); h.pct = 0; }
     placeHero(s, h);
@@ -1705,6 +1705,7 @@ function portalSolids(s, P, heroes) {
     for (let k = 0; k < 40 && circleInWall(s.map, u.x, u.y, u.r); k++) u.x += sg * 3;
   }
 }
+const CLEAR_SEQ = { slow: 2, wait: 0.7, banner: 1.7 }; // 슬로우 · 문구까지 대기 · 문구 표시 시간
 function nextStage(s) {
   const S = s.story;
   if (S.st + 1 < STAGES_PER_CHAPTER) startStage(s, S.ch, S.st + 1);
@@ -1731,18 +1732,15 @@ function updateStory(s, dt) {
     if (alive > 0) return;
     if (S.wave + 1 < S.totalWaves) { S.wave++; spawnWave(s); return; }
     S.phase = 'clear'; S.cleared = true;
-    // 마지막 적 처치: 잠깐 전체 슬로우 + 클리어 표시
-    s.slowT = 1.6;
-    s.slowEnd = { boss: !!S.boss, ch: S.ch, st: S.st, wait: 1.2 }; // 슬로우가 끝나면 클리어 표시
+    // 마지막 적 처치: 2초 슬로우 → 잠시 후 클리어 문구 → 문구가 사라지면 문이 솟아오름
+    s.slowT = CLEAR_SEQ.slow;
+    s.clearSeq = { t: 0, shown: false };
     s.clears = (s.clears || 0) + 1; if (S.boss) s.bossClears = (s.bossClears || 0) + 1;
     raiseCore(s);
     s.hazards = [];
     S.chest = { x: VIEW_CENTER.x, y: VIEW_CENTER.y + 90, open: false, big: S.boss };
     fxPush(s, { k: 'chestdrop', x: S.chest.x, y: S.chest.y, t: 0.6 });
-    // 가운데 바닥에서 거대한 문이 솟아오름 (증강을 다 고르면 빛이 나며 열림)
-    const last = S.ch === CHAPTERS.length - 1 && S.st === STAGES_PER_CHAPTER - 1;
-    S.portal = { x: VIEW_CENTER.x, y: VIEW_CENTER.y + 14, rise: 0, open: false, last, tier: AUG_STAGES[`${S.ch}-${S.st}`] || 0 };
-    fxPush(s, { k: 'portalrise', x: S.portal.x, y: S.portal.y, t: 1.6, shake: 8 });
+    S.portal = null;
     return;
   }
   if (S.phase === 'clear') {
@@ -1755,9 +1753,10 @@ function updateStory(s, dt) {
       fxPush(s, { k: 'chestopen', x: c.x, y: c.y, big: c.big, t: 1.2, shake: 4 });
     }
     const P = S.portal;
+    if (!P) return; // 클리어 연출 중 (문은 아직)
     portalSolids(s, P, heroes);
     if (P.rise < 1) P.rise = Math.min(1, P.rise + dt / 1.6);
-    if (!P.offered && P.rise >= 1 && !s.slowEnd && s.time - (s.clearShownT || 0) > 1.6) { // 문이 다 솟고 클리어 문구가 뜬 뒤 증강 (정해진 스테이지만)
+    if (!P.offered && P.rise >= 1) { // 문이 다 솟으면 증강 (정해진 스테이지만)
       P.offered = true;
       if (P.tier) {
         for (const h of heroes) h.choiceQ.push(P.tier);
@@ -1851,14 +1850,28 @@ export function botInput(s, h) {
 // ============================================================
 //  한 틱
 // ============================================================
-export function step(s, inputs, dt) {
-  if (s.slowT > 0) { s.slowT -= dt; dt *= 0.3; } // 스테이지 클리어 슬로우
-  // 슬로우가 끝나고 1.2초 뒤에 클리어 문구
-  else if (s.slowEnd && (s.slowEnd.wait -= dt) <= 0) {
-    const E = s.slowEnd; s.slowEnd = null; s.clearShownT = s.time;
-    fxPush(s, { k: 'stageclear', boss: E.boss, ch: E.ch, st: E.st, t: 2 });
-    say(s, '바닥에서 문이 솟아오른다', 2);
+// 가운데 바닥에서 거대한 문이 솟아오름 (증강을 다 고르면 빛이 나며 열림)
+function raisePortal(s) {
+  const S = s.story;
+  const last = S.ch === CHAPTERS.length - 1 && S.st === STAGES_PER_CHAPTER - 1;
+  S.portal = { x: VIEW_CENTER.x, y: VIEW_CENTER.y + 14, rise: 0, open: false, last, tier: AUG_STAGES[`${S.ch}-${S.st}`] || 0 };
+  fxPush(s, { k: 'portalrise', x: S.portal.x, y: S.portal.y, t: 1.6, shake: 8 });
+  say(s, '문이 솟아올랐다', 2);
+}
+// 클리어 연출 (실제 시간 기준)
+function updateClearSeq(s, dt) {
+  const C = s.clearSeq, S = s.story;
+  if (!S || S.phase !== 'clear') { s.clearSeq = null; return; }
+  C.t += dt;
+  if (!C.shown && C.t >= CLEAR_SEQ.slow + CLEAR_SEQ.wait) {
+    C.shown = true;
+    fxPush(s, { k: 'stageclear', boss: !!S.boss, ch: S.ch, st: S.st, t: CLEAR_SEQ.banner });
   }
+  if (C.t >= CLEAR_SEQ.slow + CLEAR_SEQ.wait + CLEAR_SEQ.banner + 0.2) { s.clearSeq = null; raisePortal(s); }
+}
+export function step(s, inputs, dt) {
+  if (s.clearSeq) updateClearSeq(s, dt);
+  if (s.slowT > 0) { s.slowT -= dt; dt *= 0.3; } // 스테이지 클리어 슬로우
   s.time += dt;
   s.msgT = Math.max(0, s.msgT - dt);
   for (const h of heroList(s)) updateHero(s, h, h.bot ? botInput(s, h) : (inputs[h.id] || {}), dt);
@@ -1946,6 +1959,7 @@ export function runSummary(s, id) {
   pendingAug.push(...h.choiceQ);
   if (S.cleared) {
     if (S.portal && !S.portal.open && !S.portal.offered && S.portal.tier) pendingAug.push(S.portal.tier);
+    else if (!S.portal && S.cleared && AUG_STAGES[`${S.ch}-${S.st}`]) pendingAug.push(AUG_STAGES[`${S.ch}-${S.st}`]); // 클리어 연출 중
     if (st + 1 < STAGES_PER_CHAPTER) st++;
     else if (ch + 1 < CHAPTERS.length) { ch++; st = 0; }
     else return null;

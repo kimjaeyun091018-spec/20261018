@@ -237,7 +237,7 @@ export function createRenderer(canvas) {
         // 땅이 무너지거나 솟는 순간: 맵이 크게 흔들림 (뒷배경·HUD는 고정)
         case 'collapse': collapseFx(f.tiles || []); quake = Math.max(quake, (f.shake || 9) * 0.9 * shakeMul); break;
         case 'rise': riseFx(f.tiles || []); quake = Math.max(quake, (f.shake || 7) * 0.9 * shakeMul); break;
-        case 'stageclear': banners.push({ text: f.boss ? 'BOSS CLEAR' : 'STAGE CLEAR', sub: `${f.ch + 1}-${f.st + 1} 클리어!`, color: f.boss ? '#ff9100' : '#ffe082', t: 1.7, max: 1.7 }); break;
+        case 'stageclear': banners.push({ text: f.boss ? 'BOSS CLEAR' : 'STAGE CLEAR', sub: `${f.ch + 1}-${f.st + 1} 클리어!`, color: f.boss ? '#ff9100' : '#ffe082', t: f.life, max: f.life }); break;
         case 'nope': if (f.who === myId) ui.say(f.x, f.y - 46, '건너편에 땅이 없어요!', '#ff8a80', 15); break;
         case 'voidleap': P.burst(f.x, f.y, 14, { kind: 'smoke', color: '#b0bec5', sp: [60, 180], life: [0.3, 0.6], size: [4, 7], grow: 10 }); ui.say(f.x, f.y - 46, '도약!', '#80d8ff', 15); break;
         case 'reflect': P.burst(f.x, f.y, 12, { kind: 'spark', color: ['#ffd54f', '#ff7043', '#ffffff'], sp: [150, 380], life: [0.15, 0.35], size: [2, 3.5] }); ui.say(f.x, f.y - 20, '반사!', '#ffd54f', 14); break;
