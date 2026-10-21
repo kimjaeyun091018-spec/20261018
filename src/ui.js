@@ -626,6 +626,7 @@ export function settings(h) {
     <div class="panel">
       <div class="head"><button class="back">← 뒤로</button><h2>설정</h2><span></span></div>
       <div class="setrow"><div><b>🔊 소리</b><small>효과음 켜기 / 끄기</small></div><button class="toggle snd ${s.muted ? '' : 'on'}">${s.muted ? '꺼짐' : '켜짐'}</button></div>
+      <div class="setrow"><div><b>📳 화면 흔들림</b><small>폭발·강한 타격 때 화면이 흔들리는 정도</small></div><button class="toggle shk ${SV.shakeLevel() ? 'on' : ''}">${['끄기', '약하게', '보통'][SV.shakeLevel()]}</button></div>
       <div class="setrow"><div><b>🕹️ 조작 버튼 배치</b><small>조이스틱과 스킬 버튼의 위치·크기·투명도를 마음대로 (터치 화면용, 이 기기에 저장) · 지금: ${L ? '내 배치' : '기본 배치'}</small></div><button class="edit">편집</button></div>
       ${L ? '<div class="setrow"><div><b>↩️ 기본 배치로</b><small>내가 정한 배치를 지우고 처음 모양으로</small></div><button class="reset">되돌리기</button></div>' : ''}
       <h3>조작</h3>
@@ -633,6 +634,7 @@ export function settings(h) {
     </div>`);
   bind('.back', () => h.back());
   bind('.snd', () => { h.setMute(!SV.S().muted); settings(h); });
+  bind('.shk', () => { h.setShake((SV.shakeLevel() + 1) % 3); settings(h); });
   bind('.edit', () => layoutEdit(h));
   bind('.reset', () => { SV.saveLayout(null); h.onLayout?.(); toast('기본 배치로 되돌렸어요'); settings(h); });
 }

@@ -188,6 +188,10 @@ export function resetTree() {
 export function clearChapter(ch) { data.cleared = Math.max(data.cleared, ch + 1); save(); }
 export function stat(k, v, max = false) { data.stats[k] = max ? Math.max(data.stats[k] || 0, v) : (data.stats[k] || 0) + v; save(); }
 export function setMuted(m) { data.muted = m; save(); }
+// 화면 흔들림: 0 끔 · 1 약하게(기본) · 2 보통
+export const SHAKE_MUL = [0, 0.35, 0.7];
+export const shakeLevel = () => (Number.isInteger(data.shake) ? data.shake : 1);
+export function setShake(v) { data.shake = v; save(); }
 
 // ---------- 조작 배치 (기기마다 따로, 클라우드 X) ----------
 // { stick|atk|s1|s2|s3|dash: { x, y, s } (x·y = 화면 가로·세로 비율의 중심, s = 크기 배율), alpha }

@@ -13,6 +13,7 @@ import { preloadGoogle, googleSignIn, googleError, signOut, savedAccount, pullSa
 
 const canvas = document.getElementById('game');
 const R = createRenderer(canvas);
+R.setShake(SV.SHAKE_MUL[SV.shakeLevel()]);
 const $controls = document.getElementById('controls');
 const $skills = document.getElementById('skills');
 const $hudTop = document.getElementById('hudTop');
@@ -35,6 +36,7 @@ const handlers = {
   mute() { const m = !SV.S().muted; SV.setMuted(m); audioMute(m); UI.pause(handlers, { code: game?.room?.code || game?.code, muted: m }); },
   quit: () => quitGame(),
   setMute(m) { SV.setMuted(m); audioMute(m); },
+  setShake(v) { SV.setShake(v); R.setShake(SV.SHAKE_MUL[v]); },
   joinCode(code) { joinGame(code, (t) => UI.toast(t)); },
   onLayout() { applyLayout(); },
   next() { const cfg = { ...game_last, ch: game.cfg.ch + 1 }; quitGame(true); startGame(cfg); },

@@ -176,6 +176,7 @@ export function createRenderer(canvas) {
   const reacts = [];
   const anim = new Map();
   const mapCache = new Map();
+  let shakeMul = 0.35; // 설정: 0 끔 · 0.35 약하게(기본) · 0.7 보통
   let shake = 0, flash = 0, flashCol = '#fff', punch = 0, dpr = 1, slowmo = 0;
   let lastNow = performance.now();
   let comboPop = 0, lastCombo = 0;
@@ -209,12 +210,13 @@ export function createRenderer(canvas) {
       const copy = { ...f, t: f.life, life: f.life };
       fxList.push(copy);
       spawnFx(copy, P, ui);
-      if (f.shake) shake = Math.min(18, shake + f.shake);
+      // 화면 흔들림: 더하지 않고 가장 큰 것만, 설정 배율 적용, 작은 흔들림(벽꿍·작은 폭발)은 무시
+      if (f.shake && shakeMul > 0 && f.shake >= 6) shake = Math.min(10 * shakeMul, Math.max(shake, f.shake * shakeMul));
       switch (f.k) {
         case 'ko': flash = 0.25; flashCol = '#ffffff'; punch = 0.04; break;
         case 'die': if (f.boss) { flash = 0.4; punch = 0.05; } break;
-        case 'hit': if (f.crit) punch = Math.max(punch, 0.015); break;
-        case 'react': punch = Math.max(punch, 0.02); break;
+        case 'hit': if (f.crit) punch = Math.max(punch, 0.015 * shakeMul); break;
+        case 'react': punch = Math.max(punch, 0.02 * shakeMul); break;
         case 'lethal': punch = Math.max(punch, f.hero ? 0.09 : 0.045); slowmo = f.hero ? 0.35 : 0.18; flash = f.hero ? 0.22 : 0.1; flashCol = f.hero ? '#e3f2fd' : '#ffffff'; break;
         case 'cast': anim.set(f.who, { t: performance.now(), i: f.i, type: f.type }); break;
         case 'chapter': banners.push({ text: `${f.ch + 1}장`, sub: f.name, color: '#80d8ff', t: 2.4, max: 2.4 }); break;
@@ -886,7 +888,7 @@ export function createRenderer(canvas) {
     for (const r of reacts) r.t -= dt;
     for (let i = reacts.length - 1; i >= 0; i--) if (reacts[i].t <= 0) reacts.splice(i, 1);
     for (let i = banners.length - 1; i >= 0; i--) if (banners[i].t <= 0) banners.splice(i, 1);
-    shake = Math.max(0, shake - dt * 40);
+    shake = Math.max(0, shake - dt * 55);
     flash = Math.max(0, flash - dt);
     punch = Math.max(0, punch - dt * 0.25);
     comboPop = Math.max(0, comboPop - dt * 5);
@@ -1115,5 +1117,5 @@ export function createRenderer(canvas) {
     ctx.drawImage(nebula, x * TILE, y * TILE, TILE, TILE, x * TILE, y * TILE, TILE, TILE);
   }
   function reset() { P.list.length = 0; fxList.length = 0; texts.length = 0; ghosts.length = 0; banners.length = 0; shake = 0; flash = 0; slowmo = 0; }
-  return { render, hooks, particles: P, resize, reset, toWorld, cam };
+  return { render, hooks, particles: P, resize, reset, toWorld, cam, setShake(m) { shakeMul = m; shake = 0; } };
 }
