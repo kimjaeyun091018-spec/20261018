@@ -383,6 +383,9 @@ HEROES['guardian'] = dict(
         '..........RRRR..',
     ], pivot=(1, 2)),
     kind='heavy', legs=('p', 'o', 'O'), arm='a', glove='C', reach=3,
+    # 직접 그려 온 도트 (tools/art/src/guardian.png → import_sprite.py 4.83 "" defringe). 망치 머리만 손잡이 끝을 축으로 휘두름
+    sprite=dict(file='tools/art/guardian.png', cell=160, scale=0.5, weapon_from=(101, 82), pivot=(100, 117), legs=(137, 60), face=(46, 12, 64),
+                ang=dict(rest=0, windup=-22, strike=14, follow=8, hurt=6, win=-18)),
 )
 
 # =====================================================================
