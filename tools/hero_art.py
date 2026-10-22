@@ -529,6 +529,9 @@ HEROES['sniper'] = dict(
         '.B.................',
     ], pivot=(3, 2)),
     kind='gun', legs=('p', 'o', 'O'), arm='a', glove='C',
+    # 직접 그려 온 도트 (tools/art/src/sniper.png → import_sprite.py 5.96 "" glow). 총열 끝만 반동으로 앞뒤로
+    sprite=dict(file='tools/art/sniper.png', cell=176, scale=0.5, weapon_from=(118, 80), pivot=(118, 90), legs=(122, 85), face=(53, 0, 64),
+                ang=dict(rest=0, windup=0, strike=0, follow=0, hurt=4, win=-6), push=dict(windup=1, strike=-3, follow=-1)),
 )
 
 # =====================================================================

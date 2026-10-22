@@ -38,7 +38,7 @@ def estimate_pixel(im, mask, x0):
     return float(ok.max())
 
 
-def shrink(img, H):
+def shrink(img, H, glow=False):
     """촘촘한 도트를 키 H로 줄이기: 원본 색(48색)만 쓰고, 칸마다 가장 많은 색 (외곽선·금색은 조금 우선)"""
     w, h = img.size
     if h <= H:
@@ -63,14 +63,15 @@ def shrink(img, H):
             gold = lambda k: pal[k][0] > 200 and pal[k][1] > 140 and pal[k][2] < 120
             best = max(c, key=lambda k: c[k] * (1.6 if lum[k] < 110 else 1) * (1.3 if gold(k) else 1))
             col = pal[best]
-            if col[0] > 200 and col[2] > 150 and col[1] < 200:  # 분홍이 섞인 반짝이 → 노란 빛
+            if not glow and col[0] > 200 and col[2] > 150 and col[1] < 200:  # 분홍이 섞인 반짝이 → 노란 빛
                 col = (255, 245, 157)
             res[y, x, :3] = col
             res[y, x, 3] = 255
     return Image.fromarray(res, 'RGBA')
 
 
-def main(src, out, p=None, target=None):
+def main(src, out, p=None, target=None, mode=''):
+    glow = mode == 'glow'  # 몸 안쪽의 분홍 빛(눈·보석)은 배경이 아니라 그대로 둠 (바깥과 이어진 분홍만 배경)
     global BG
     im = np.array(Image.open(src).convert('RGB')).astype(int)
     BG = tuple(int(v) for v in np.median(np.concatenate([im[:8, :8].reshape(-1, 3), im[-8:, -8:].reshape(-1, 3), im[:8, -8:].reshape(-1, 3)]), 0))
@@ -91,11 +92,36 @@ def main(src, out, p=None, target=None):
             c = np.median(blk, 0).astype(int)
             res[j, i, :3] = c
             res[j, i, 3] = 0 if is_bg(c) else 255
+    if glow:  # 바깥 테두리와 이어진 분홍 칸만 배경으로, 안쪽에 갇힌 분홍은 빛으로 남김
+        out_bg = np.zeros((ny, nx), bool)
+        st = [(j, i) for j in range(ny) for i in (0, nx - 1)] + [(j, i) for i in range(nx) for j in (0, ny - 1)]
+        while st:
+            j, i = st.pop()
+            if not (0 <= j < ny and 0 <= i < nx) or out_bg[j, i] or res[j, i, 3]:
+                continue
+            out_bg[j, i] = True
+            st += [(j + 1, i), (j - 1, i), (j, i + 1), (j, i - 1)]
+        # 갇힌 분홍 덩어리: 작으면(눈·보석 빛) 남기고, 크면(연기 사이 틈) 배경
+        seen = out_bg.copy()
+        for j in range(ny):
+            for i in range(nx):
+                if res[j, i, 3] or seen[j, i]:
+                    continue
+                comp, st = [], [(j, i)]
+                seen[j, i] = True
+                while st:
+                    y, x = st.pop(); comp.append((y, x))
+                    for yy, xx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                        if 0 <= yy < ny and 0 <= xx < nx and not seen[yy, xx] and not res[yy, xx, 3]:
+                            seen[yy, xx] = True; st.append((yy, xx))
+                if len(comp) <= 30:
+                    for y, x in comp:
+                        res[y, x, 3] = 255
     # 분홍이 섞인 가장자리 색 정리
     for j in range(ny):
         for i in range(nx):
             r, g, b, a = res[j, i]
-            if a and (int(r) - BG[0]) ** 2 + (int(g) - BG[1]) ** 2 + (int(b) - BG[2]) ** 2 < 120 ** 2:
+            if a and not glow and (int(r) - BG[0]) ** 2 + (int(g) - BG[1]) ** 2 + (int(b) - BG[2]) ** 2 < 120 ** 2:
                 edge = any(not (0 <= j + dj < ny and 0 <= i + di < nx) or res[j + dj, i + di, 3] == 0 for dj, di in ((1, 0), (-1, 0), (0, 1), (0, -1)))
                 if edge:
                     res[j, i, 3] = 0
@@ -127,7 +153,7 @@ def main(src, out, p=None, target=None):
     img = Image.fromarray(res, 'RGBA')
     img = img.crop(img.getbbox())
     if target:
-        img = shrink(img, int(target))
+        img = shrink(img, int(target), glow)
         img = img.crop(img.getbbox())
     img.save(out)
     print(f'픽셀 크기 {p:.2f}px → {img.size[0]}x{img.size[1]}')
