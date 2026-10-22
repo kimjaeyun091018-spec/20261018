@@ -1,5 +1,5 @@
 // 메뉴 화면들 (DOM)
-import { CHARS, CHAR_KEYS, ELEMENTS, TREE, CHAPTERS, REACTIONS, HERO_SPRITE, HERO_SHEETS, HERO_SIZE, AUGMENTS, ITEMS, RARITY, RARITY_ORDER, BOXES, GACHA, HERO_LV, heroStats, STAT_NAMES, ACCOUNT, ACHIEVEMENTS } from './data.js';
+import { CHARS, CHAR_KEYS, ELEMENTS, TREE, CHAPTERS, REACTIONS, HERO_SPRITE, HERO_SHEETS, HERO_SIZE, AUGMENTS, ITEMS, RARITY, RARITY_ORDER, BOXES, GACHA, HERO_LV, heroStats, STAT_NAMES, ACCOUNT, ACHIEVEMENTS, SHOP } from './data.js';
 import { COLOSSEUM_ARENAS } from './maps.js';
 import * as SV from './save.js';
 import * as SIM from './sim.js';
@@ -130,7 +130,10 @@ export function lobby(h) {
         <section class="modes">
           <button class="big story" data-go="story"><b>스토리 모드</b><small>${SV.getRun() ? `▶ ${SV.getRun().ch + 1}-${SV.getRun().st + 1}부터 이어하기 가능` : '스테이지 돌파 · 증강 · 최대 4명 협동'}</small></button>
           <button class="big colo" data-go="colo"><b>콜로세움</b><small>친구·봇과 대난투식 대전 · 날려서 링아웃</small></button>
-          <button class="big boxbtn" data-go="boxes"><span class="mchest"><i></i></span><span><b>뽑기 상자</b><small>${SV.allOwned() ? '영웅 레벨업 재료 ⚡P.P 모으기' : `새 영웅과 ⚡P.P를 뽑아 보세요 · 영웅 ${s.owned.length}/${CHAR_KEYS.length}`}</small></span></button>
+          <div class="duo">
+            <button class="big boxbtn" data-go="boxes"><span class="mchest"><i></i></span><span><b>뽑기 상자</b><small>${SV.allOwned() ? '영웅 레벨업 재료 ⚡P.P 모으기' : `새 영웅과 ⚡P.P · 영웅 ${s.owned.length}/${CHAR_KEYS.length}`}</small></span></button>
+            <button class="big shopbtn" data-go="shop"><span class="mshop">🛒</span><span><b>상점</b><small>⚡P.P · 🔑 열쇠</small></span></button>
+          </div>
           <div class="rowbtns">
             <button data-go="achievements">🏆 업적${SV.achReady() ? ` <span class="dot">${SV.achReady()}</span>` : ''}</button>
             <button data-go="social">👥 친구 · 길드</button>
@@ -619,6 +622,39 @@ export function achievements(h) {
     </div>`);
   bind('.back', () => h.back());
   bind('.claim', (b) => { const A = SV.claimAch(b.dataset.id); if (A) { sfx('buy'); toast(`업적 「${A.name}」 보상: 🔑 ${A.keys} · 💰 ${A.gold}`); } achievements(h); });
+}
+
+// ---------- 상점 (골드 사용처, 매일 자정 초기화) ----------
+export function shop(h) {
+  const s = SV.S(), sh = SV.shopToday();
+  const kn = sh.key || 0, kp = SV.shopKeyPrice(), kOut = kn >= SHOP.key.max;
+  show(`
+    <div class="panel shop">
+      <div class="head"><button class="back">← 뒤로</button><h2>상점</h2><span class="keys">💰 ${s.gold.toLocaleString()} G · 🔑 ${s.keys || 0}</span></div>
+      <p class="sub center">매일 자정에 오늘의 영웅이 바뀌고, 살 수 있는 횟수가 다시 채워져요. 같은 날 다시 살수록 비싸져요.</p>
+      <h3>⚡ 오늘의 영웅 P.P</h3>
+      <div class="shopgrid">${sh.heroes.map((c) => {
+        const C = CHARS[c], lv = SV.heroLv(c), pp = SV.heroPP(c), need = HERO_LV.pp[lv] || 0, max = lv >= HERO_LV.max;
+        const n = sh.pp[c] || 0, out = n >= SHOP.pp.max, price = SV.shopPPPrice(c);
+        return `<div class="sitem" style="--c:${C.color}">
+          <div class="sport" data-c="${c}"></div>
+          <b>${C.name}</b><small>Lv ${lv}${max ? ' (최대)' : ''}</small>
+          <div class="ppbar"><i style="width:${max ? 100 : Math.min(100, (pp / need) * 100)}%"></i><span>⚡ ${pp}${max ? '' : ` / ${need}`}</span></div>
+          <button class="big buypp" data-c="${c}" ${out || s.gold < price ? 'disabled' : ''}>${out ? '오늘은 끝' : `⚡ ${SHOP.pp.n} P.P<small>💰 ${price.toLocaleString()} G</small>`}</button>
+          <em>오늘 ${n} / ${SHOP.pp.max}</em>
+        </div>`;
+      }).join('')}</div>
+      <h3>🔑 원소 열쇠</h3>
+      <div class="sitem wide">
+        <span class="kicon">🔑</span>
+        <div><b>원소 열쇠 ${SHOP.key.n}개</b><small>뽑기 상자를 여는 열쇠 · 오늘 ${kn} / ${SHOP.key.max}</small></div>
+        <button class="big buykey" ${kOut || s.gold < kp ? 'disabled' : ''}>${kOut ? '오늘은 끝' : `💰 ${kp.toLocaleString()} G`}</button>
+      </div>
+    </div>`);
+  $menu.querySelectorAll('.sport').forEach((el) => el.appendChild(portrait(el.dataset.c, 72, true)));
+  bind('.back', () => h.back());
+  bind('.buypp', (b) => { const C = CHARS[b.dataset.c]; if (SV.shopBuyPP(b.dataset.c)) { sfx('buy'); toast(`${C.name} ⚡P.P +${SHOP.pp.n}`); } shop(h); });
+  bind('.buykey', () => { if (SV.shopBuyKey()) { sfx('buy'); toast(`🔑 원소 열쇠 +${SHOP.key.n}`); } shop(h); });
 }
 
 // ---------- 설정 ----------

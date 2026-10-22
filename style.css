@@ -449,3 +449,29 @@ button.big.lvup:disabled { opacity: .5; }
 .bad { color: #ff8a80; }
 .lobby .modes .rowbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .lobby .modes .rowbtns button { white-space: nowrap; padding: 8px 6px; font-size: 13px; }
+
+/* 로비: 뽑기 상자 · 상점 나란히 */
+.modes .duo { display: grid; grid-template-columns: 1.6fr 1fr; gap: 10px; }
+.modes .duo button.big { min-width: 0; }
+button.shopbtn { display: flex; align-items: center; gap: 12px; background: linear-gradient(135deg, #ef6c00, #a84300 60%, #3a1a08); border-color: #ffcc80; }
+button.shopbtn:hover { filter: brightness(1.15); }
+.mshop { font-size: 34px; line-height: 1; flex: none; }
+@media (max-width: 520px) { .modes .duo { grid-template-columns: 1fr; } }
+/* 상점 */
+.shop h3 { margin: 18px 0 10px; }
+.shopgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+.sitem { box-sizing: border-box; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 12px; border-radius: 14px; background: rgba(255, 255, 255, .04); border: 1px solid color-mix(in srgb, var(--c, #7e57c2) 55%, transparent); }
+.sitem b { font-size: 17px; }
+.sitem small { color: rgba(255, 255, 255, .7); }
+.sitem em { font-style: normal; font-size: 12px; color: rgba(255, 255, 255, .55); }
+.sport canvas { width: 72px; height: 72px; border-radius: 12px; border: 2px solid var(--c, #7e57c2); image-rendering: pixelated; display: block; }
+.sitem .ppbar { box-sizing: border-box; flex: none; width: 100%; min-width: 0; margin: 0; height: 18px; border-radius: 9px; background: rgba(0, 0, 0, .4); }
+.sitem .ppbar span { line-height: 18px; }
+.sitem button.big { box-sizing: border-box; width: 100%; text-align: center; padding: 10px; font-size: 16px; font-weight: 800; background: linear-gradient(135deg, #5b47b8, #3a2f6c); }
+.sitem button.big small { display: block; font-weight: 600; }
+.sitem button.big:disabled { opacity: .45; }
+.sitem.wide { flex-direction: row; text-align: left; --c: #ffb300; }
+.sitem.wide > div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.sitem.wide button.big { width: auto; min-width: 130px; background: linear-gradient(135deg, #ffb300, #f57c00); color: #2b1600; }
+.kicon { font-size: 34px; }
+@media (max-width: 520px) { .sitem { padding: 10px 8px; } .sitem button.big { font-size: 14px; padding: 8px 4px; } .sport canvas { width: 60px; height: 60px; } }

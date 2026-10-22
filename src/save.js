@@ -1,5 +1,5 @@
 // 저장: 기기(localStorage)에 계정별로 따로, 구글 계정이면 클라우드에도 (cloud.js)
-import { TREE, CHARS, CHAR_KEYS, RARITY, RARITY_ORDER, BOXES, GACHA, HERO_LV, ACCOUNT, ACHIEVEMENTS, reachReward } from './data.js';
+import { TREE, CHARS, CHAR_KEYS, RARITY, RARITY_ORDER, BOXES, GACHA, HERO_LV, ACCOUNT, ACHIEVEMENTS, reachReward, SHOP, shopPrice } from './data.js';
 
 const BASE = 'elementArena.v1';
 let account = null; // null = 게스트, 'g-<uid>' = 구글 계정
@@ -117,6 +117,36 @@ export function levelUp(c) {
   const lv = heroLv(c);
   data.pp[c] -= HERO_LV.pp[lv]; data.gold -= HERO_LV.gold[lv];
   data.lv[c] = lv + 1; save();
+  return true;
+}
+// ---------- 상점 (매일 초기화) ----------
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+// 오늘의 상점: 날짜가 바뀌면 영웅을 새로 뽑고 산 횟수를 지움 (그날 안에는 그대로)
+export function shopToday() {
+  const day = today();
+  if (data.shop?.day !== day) {
+    const can = data.owned.filter((c) => heroLv(c) < HERO_LV.max);
+    const pool = can.length ? can : [...data.owned];
+    let seed = [...day].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    data.shop = { day, heroes: pool.slice(0, SHOP.slots), pp: {}, key: 0 };
+    save(true);
+  }
+  return data.shop;
+}
+export const shopPPPrice = (c) => shopPrice(SHOP.pp, shopToday().pp[c] || 0);
+export const shopKeyPrice = () => shopPrice(SHOP.key, shopToday().key || 0);
+export function shopBuyPP(c) {
+  const sh = shopToday(), n = sh.pp[c] || 0, cost = shopPrice(SHOP.pp, n);
+  if (!sh.heroes.includes(c) || !owns(c) || n >= SHOP.pp.max || data.gold < cost) return false;
+  data.gold -= cost; sh.pp[c] = n + 1; data.pp[c] = (data.pp[c] || 0) + SHOP.pp.n; save();
+  return true;
+}
+export function shopBuyKey() {
+  const sh = shopToday(), n = sh.key || 0, cost = shopPrice(SHOP.key, n);
+  if (n >= SHOP.key.max || data.gold < cost) return false;
+  data.gold -= cost; sh.key = n + 1; data.keys = (data.keys || 0) + SHOP.key.n; save();
   return true;
 }
 // ---------- 열쇠 · 계정 레벨 · 업적 · 첫 도달 보상 ----------

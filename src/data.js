@@ -277,6 +277,15 @@ export const HERO_STATS = {
 };
 // 레벨마다 소폭 증가: hp·atk·spd는 %(기본값에 곱함), shield는 점수, crit·critDmg는 %p
 export const HERO_GROW = { hp: 0.03, atk: 0.03, shield: 3, spd: 0.01, crit: 0.6, critDmg: 4 };
+// ---------- 상점 (골드 사용처) · 매일 자정에 초기화 ----------
+// 오늘의 영웅: 가진 영웅 중 매일 바뀌는 3명의 ⚡P.P를 골드로 · 원소 열쇠도 하루 몇 개만 골드로
+// 같은 날 다시 살수록 비싸짐 (price × grow^산 횟수)
+export const SHOP = {
+  slots: 3,
+  pp: { n: 20, price: 400, grow: 1.5, max: 3 },   // 한 번에 20 P.P · 400 → 600 → 900 G
+  key: { n: 1, price: 700, grow: 1.5, max: 2 },   // 열쇠 1개 · 700 → 1050 G
+};
+export const shopPrice = (o, bought) => Math.round((o.price * o.grow ** bought) / 10) * 10;
 export const HERO_LV = {
   max: 10,
   pp: [0, 20, 30, 50, 80, 130, 210, 340, 550, 890],       // pp[lv] = lv → lv+1 에 필요한 P.P
