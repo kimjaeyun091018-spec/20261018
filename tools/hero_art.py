@@ -596,6 +596,9 @@ HEROES['alchemist'] = dict(
     ], pivot=(2, 4)),
     kind='hold', legs=('p', 'o', 'O'), arm='a', glove='a',
     ang=dict(rest=0, windup=-50, strike=-10, follow=20, hurt=30, win=-70),
+    # 직접 그려 온 도트 (tools/art/src/alchemist.png → import_sprite.py 4.25 "" defringe). 플라스크(+연기)만 손을 축으로 던지듯 흔듦
+    sprite=dict(file='tools/art/alchemist.png', cell=216, scale=0.34, weapon_from=(999, 999), weapon_extra=((132, 50, 174, 142),), pivot=(137, 108), legs=(180, 92), face=(66, 36, 64),
+                ang=dict(rest=0, windup=-25, strike=18, follow=8, hurt=8, win=-20)),
 )
 
 # =====================================================================

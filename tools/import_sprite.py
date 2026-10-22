@@ -151,12 +151,12 @@ def main(src, out, p=None, target=None, mode=''):
     big = max(sizes, key=sizes.get)
     res[lab != big] = 0
     if mode == 'defringe':  # 보라색이 없는 캐릭터: 테두리에 남은 분홍빛 보라 점 지우기
-        for _ in range(2):
+        for _ in range(3):
             a = res[:, :, 3] > 0
             edge = np.zeros_like(a)
             edge[1:-1, 1:-1] = a[1:-1, 1:-1] & ~(a[:-2, 1:-1] & a[2:, 1:-1] & a[1:-1, :-2] & a[1:-1, 2:])
             r, g, b = (res[:, :, k].astype(int) for k in range(3))
-            res[edge & (r > 90) & (b > 90) & (g < 80) & (np.abs(r - b) < 90)] = 0
+            res[edge & (((b > 50) & (r > g + 25) & (b > g + 25)) | ((b > g + 5) & (r > g + 60)))] = 0
     img = Image.fromarray(res, 'RGBA')
     img = img.crop(img.getbbox())
     if target:
