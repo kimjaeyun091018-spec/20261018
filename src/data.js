@@ -36,7 +36,7 @@ export const ELEMENTS = {
 export const STATUS = {
   burn: { from: 'fire', time: 3, tick: 0.5, dmg: 2, name: '화상' },
   shock: { from: 'lightning', time: 2.5, name: '감전' },
-  chill: { from: 'ice', time: 3, slow: 0.45, freezeAt: 3, name: '둔화' },
+  chill: { from: 'ice', time: 3, slow: 0.45, freezeAt: 3, freezeTime: 1, immune: 2.5, name: '둔화' }, // 빙결 1초 · 풀린 뒤 2.5초는 다시 안 얼음
   wet: { from: 'water', time: 4, name: '젖음' },
   poison: { from: 'poison', time: 5, tick: 0.6, dmgPerStack: 1, maxStack: 6, name: '중독' },
   mark: { from: 'shadow', time: 4, name: '표식' },
@@ -47,8 +47,8 @@ export const REACTIONS = [
   { has: 'burn', el: 'water', id: 'steam', name: '증기 폭발', color: '#eceff1', r: 70, dmg: 14, kb: [180, 260] },
   { has: 'wet', el: 'lightning', id: 'electro', name: '감전 연쇄', color: '#fff176', chain: 4, dmg: 12, kb: [90, 140] },
   { has: 'shock', el: 'water', id: 'electro', name: '감전 연쇄', color: '#fff176', chain: 4, dmg: 12, kb: [90, 140] },
-  { has: 'wet', el: 'ice', id: 'freeze', name: '빙결', color: '#b3e5fc', freeze: 1.6, dmg: 6 },
-  { has: 'chill', el: 'water', id: 'freeze', name: '빙결', color: '#b3e5fc', freeze: 1.6, dmg: 6 },
+  { has: 'wet', el: 'ice', id: 'freeze', name: '빙결', color: '#b3e5fc', freeze: 1, dmg: 6 },
+  { has: 'chill', el: 'water', id: 'freeze', name: '빙결', color: '#b3e5fc', freeze: 1, dmg: 6 },
   { has: 'chill', el: 'fire', id: 'melt', name: '융해', color: '#ffccbc', dmg: 22, kb: [120, 220] },
   { has: 'frozen', el: 'fire', id: 'melt', name: '융해', color: '#ffccbc', dmg: 26, kb: [120, 220] },
   { has: 'burn', el: 'ice', id: 'melt', name: '융해', color: '#ffccbc', dmg: 22, kb: [120, 220] },

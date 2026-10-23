@@ -325,7 +325,9 @@ const hasStatus = (t, k) => (k === 'frozen' ? t.st.frozen > 0 : t.st[k] && t.st[
 function applyElement(s, t, el, by, canFreeze = false) {
   if (!isUnit(t)) return;
   let R = REACTIONS.find((r) => r.el === el && hasStatus(t, r.has));
-  if (R?.freeze && !canFreeze) R = { ...R, name: '둔화', freeze: 0, chillR: true };
+  // 빙결은 눈보라만 · 풀린 뒤 잠깐은 다시 얼지 않음 (계속 얼어 있지 않게)
+  const freezeOk = canFreeze && !(t.fzImm > s.time);
+  if (R?.freeze && !freezeOk) R = { ...R, name: '둔화', freeze: 0, chillR: true };
   if (R && !(t.reactCd > 0)) {
     t.reactCd = 0.35;
     if (R.has === 'frozen') t.st.frozen = 0; else delete t.st[R.has];
@@ -339,10 +341,11 @@ function applyElement(s, t, el, by, canFreeze = false) {
     case 'water': t.st.wet = { t: STATUS.wet.time }; break;
     case 'shadow': t.st.mark = { t: STATUS.mark.time, by: by?.id }; break;
     case 'ice': {
+      if (t.st.frozen > 0) break; // 얼어 있는 동안엔 둔화가 쌓이지 않음
       const c = t.st.chill || { t: 0, n: 0 };
       c.t = STATUS.chill.time; c.n++;
       t.st.chill = c;
-      if (canFreeze && c.n >= STATUS.chill.freezeAt && !t.boss) { delete t.st.chill; t.st.frozen = 1.2; fxPush(s, { k: 'react', x: t.x, y: t.y, name: '빙결', color: '#b3e5fc', r: 30, t: 0.9, rid: 'freeze' }); }
+      if (freezeOk && c.n >= STATUS.chill.freezeAt && !t.boss) { delete t.st.chill; t.st.frozen = STATUS.chill.freezeTime; t.fzImm = s.time + STATUS.chill.freezeTime + STATUS.chill.immune; fxPush(s, { k: 'react', x: t.x, y: t.y, name: '빙결', color: '#b3e5fc', r: 30, t: 0.9, rid: 'freeze' }); }
       break;
     }
     case 'poison': {
@@ -374,7 +377,7 @@ function triggerReaction(s, t, R, by) {
     t.st.chill = { t: STATUS.chill.time, n: 1 }; t.slowT = Math.max(t.slowT || 0, 1.6);
     hit(s, t, hitOpt(t, R.dmg, [0, 0]));
   } else if (R.freeze) {
-    t.st.frozen = R.freeze;
+    t.st.frozen = R.freeze; t.fzImm = s.time + R.freeze + STATUS.chill.immune;
     hit(s, t, hitOpt(t, R.dmg, [0, 0]));
   } else if (R.r) {
     for (const u of foesOf(s, team)) {
