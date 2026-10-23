@@ -657,6 +657,9 @@ HEROES['berserker'] = dict(
         '..........RrrrRu.',
     ], pivot=(2, 2)),
     kind='heavy', legs=('p', 'o', 'O'), arm='s', glove='A', reach=4,
+    # 직접 그려 온 도트 (tools/art/src/berserker.png → import_sprite.py 4.75 "" defringe). 불타는 도끼 머리만 손을 축으로 휘두름
+    sprite=dict(file='tools/art/berserker.png', cell=232, scale=0.4, weapon_from=(161, 85), pivot=(152, 135), legs=(176, 108), face=(100, 30, 64),
+                ang=dict(rest=0, windup=-35, strike=25, follow=12, hurt=8, win=-25)),
 )
 
 # =====================================================================
