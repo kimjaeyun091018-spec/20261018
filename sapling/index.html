@@ -64,6 +64,33 @@ canvas{display:block;width:100%;aspect-ratio:720/480;max-width:100%;cursor:point
 .log li.good span:last-child{color:#cfe3ad}
 .log li.bad span:last-child{color:#f0a89c}
 .log li.story span:last-child{font-family:var(--f-display)}
+.badge{display:inline-block;min-width:1.5em;padding:0 6px;border-radius:999px;background:var(--line);color:var(--muted);font-family:var(--f-body);font-size:.72rem;text-align:center;margin-left:4px;font-variant-numeric:tabular-nums}
+.badge.hot{background:#d9b88a;color:#241a10}
+.trhead{display:flex;flex-wrap:wrap;gap:2px 14px;align-items:baseline;margin:10px 0 8px}
+.trhead .rn{font-family:var(--f-display);font-size:1.3rem;color:#d9b88a;font-variant-numeric:tabular-nums}
+.trhead .ex{font-size:.8rem;color:var(--muted)}
+.treewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding-block:10px}
+.tree{position:relative;margin:0 auto}
+.tree svg{position:absolute;inset:0;overflow:visible}
+.tree line{stroke:var(--line);stroke-width:3;stroke-linecap:round}
+.tree text{fill:var(--muted);font-size:13px;font-family:var(--f-display);letter-spacing:.1em}
+.node{position:absolute;transform:translate(-50%,-50%);width:76px;min-height:58px;border-radius:10px;border:1.5px solid var(--line);background:var(--ground);padding:5px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.2}
+.node b{font-weight:400;font-size:.76rem;text-align:center;word-break:keep-all}
+.node small{font-size:.68rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.node.own{border-color:var(--c);box-shadow:inset 0 0 0 40px rgba(255,255,255,.05)}
+.node.own b{color:var(--c)}
+.node.can{border-color:var(--c);border-style:dashed}
+.node.can small{color:var(--ink)}
+.node.poor{opacity:.7}
+.node.lock{opacity:.32}
+.node.sel{outline:2px solid var(--ink);outline-offset:2px}
+.tdetail{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px}
+.tdetail .n{font-family:var(--f-display);font-weight:700}
+.tdetail .n small{font-family:var(--f-body);font-weight:400;margin-left:6px}
+.tdetail .e{grid-column:1;font-size:.84rem;color:var(--muted)}
+.tdetail button{grid-row:1/3;grid-column:2}
+.tdetail button:disabled{background:var(--line);color:var(--muted);cursor:not-allowed}
+.treset{margin-top:8px}
 .modal{position:fixed;inset:0;background:rgba(8,12,9,.72);display:flex;align-items:center;justify-content:center;padding:20px max(16px,env(safe-area-inset-right,0px)) 20px max(16px,env(safe-area-inset-left,0px));z-index:20}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:440px;width:100%;display:flex;flex-direction:column;gap:12px;max-height:90vh;overflow:auto}
 .card h3{font-family:var(--f-display);font-size:1.35rem;margin:0}
@@ -111,9 +138,16 @@ canvas{display:block;width:100%;aspect-ratio:720/480;max-width:100%;cursor:point
 
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" id="t-grow" aria-selected="true">키우기</button>
+    <button class="tab" role="tab" id="t-tree" aria-selected="false">스킬 트리<span class="badge" id="ringBadge">0</span></button>
     <button class="tab" role="tab" id="t-book" aria-selected="false">숲 일지</button>
   </div>
   <section id="p-grow"><div class="ups" id="ups"></div></section>
+  <section id="p-tree" hidden>
+    <div class="trhead"><span>나이테 <span class="rn" id="ringN">0</span>개</span><span class="ex">큰나무가 자라고, 바위를 쪼개고, 병충해를 손으로 떼고, 숲 일지를 채우면 나이테가 생겨요.</span></div>
+    <div class="treewrap" id="treewrap"><div class="tree" id="tree"></div></div>
+    <div class="tdetail" id="tdetail"></div>
+    <div class="row treset"><button class="ghost" id="treset">전부 되돌리기 (나이테 돌려받기)</button></div>
+  </section>
   <section id="p-book" hidden>
     <div class="ms" id="ms"></div>
     <ul class="log" id="log"></ul>
@@ -191,32 +225,61 @@ const MILESTONES=[
   ['rocks','모든 바위가 흙이 됨'],['full','민둥산이 숲이 됨']
 ];
 
+const BR={root:{n:'뿌리',c:'#b08559'},imm:{n:'면역',c:'#6db2d4'},pow:{n:'강화',c:'#e5b44a'},kin:{n:'자연의 벗',c:'#9cc65b'}};
+const TREE=[
+  {id:'root',b:'root',n:'깨어난 뿌리',d:'스킬 트리가 열려요. 어미나무가 만드는 양분 +20%',cost:1,x:0,y:0},
+  {id:'sap',b:'imm',n:'수액 방어막',d:'병충해가 나무를 갉는 속도 -25%',cost:2,x:-1,y:0,req:['root']},
+  {id:'phyto',b:'imm',n:'피톤치드',d:'병충해가 30% 덜 자주 생겨요',cost:3,x:-2,y:-1,req:['sap']},
+  {id:'resin',b:'imm',n:'끈끈한 송진',d:'벌레를 한 번 덜 눌러도 떨어져요',cost:3,x:-2,y:1,req:['sap']},
+  {id:'myco',b:'imm',n:'균근 그물',d:'흰가루병이 절반만 생기고, 옆 나무로 번지지 않아요',cost:5,x:-3,y:-1,req:['phyto']},
+  {id:'heal',b:'imm',n:'새살 돋기',d:'나무 건강이 3배 빨리 차고, 병충해를 떼면 건강 +40',cost:5,x:-3,y:1,req:['resin']},
+  {id:'immune',b:'imm',n:'숲의 면역',d:'큰나무는 진딧물과 송충이에 걸리지 않아요',cost:8,x:-4,y:0,req:['myco','heal']},
+  {id:'sun',b:'pow',n:'햇살 모으기',d:'모든 양분 +15%',cost:2,x:1,y:0,req:['root']},
+  {id:'touch',b:'pow',n:'손끝의 온기',d:'어미나무를 누를 때 양분 2배',cost:3,x:2,y:-1,req:['sun']},
+  {id:'quick',b:'pow',n:'빠른 싹',d:'새싹과 묘목이 2배 빨리 자라요',cost:3,x:2,y:1,req:['sun']},
+  {id:'leaves',b:'pow',n:'겹잎',d:'모든 양분 +30%',cost:5,x:3,y:-1,req:['touch']},
+  {id:'pod',b:'pow',n:'씨앗 꼬투리',d:'씨앗이 떨어질 때마다 1개 더',cost:5,x:3,y:1,req:['quick']},
+  {id:'giant',b:'pow',n:'거목',d:'큰나무가 만드는 양분 1.6배',cost:8,x:4,y:0,req:['leaves','pod']},
+  {id:'call',b:'kin',n:'새 모이',d:'새가 벌레를 50% 더 빨리 잡아요',cost:2,x:0,y:-1,req:['root']},
+  {id:'moss',b:'kin',n:'바위 이끼',d:'바위 쪼개는 데 드는 양분 -30%',cost:3,x:-1,y:-2,req:['call']},
+  {id:'worm',b:'kin',n:'지렁이 친구',d:'바위를 50% 더 빨리 쪼개요',cost:3,x:1,y:-2,req:['call']},
+  {id:'beav',b:'kin',n:'비버의 이웃',d:'비버가 큰나무 4그루면 오고, 집을 2배 빨리 지어요',cost:5,x:0,y:-2,req:['call']},
+  {id:'chorus',b:'kin',n:'새들의 합창',d:'머무는 새 한 마리마다 모든 양분 +6%',cost:8,x:0,y:-3,req:['beav','moss','worm']}
+];
+const BR_LABEL=[['imm',-4,-1],['pow',4,-1],['kin',1.6,-3]];
+
 /* ================= 상태 ================= */
 function fresh(){return{v:1,nut:0,seed:3,mainLv:1,up:{leaf:0,root:1,wind:0,soil:0,nest:0},
   spots:SPOTS.map(s=>({st:s.rock?-1:0,g:0,hp:100,sp:0,crack:-1,pest:null,stump:false})),
   beaver:{here:false,prog:0},ms:{},log:[],seedT:0,pestT:60,cleared:0,beaten:0,lost:0,
-  sound:false,started:false,ended:false,last:Date.now()};}
+  sound:false,started:false,ended:false,tree:[],rings:0,last:Date.now()};}
 let G;
 const KEY='mindungsan-idle-v1';
 function save(){G.last=Date.now();try{localStorage.setItem(KEY,JSON.stringify(G))}catch(e){}}
-function load(){try{const s=localStorage.getItem(KEY);if(!s)return null;const g=JSON.parse(s);if(!g||g.v!==1||!g.spots||g.spots.length!==N)return null;return g;}catch(e){return null}}
+function load(){try{const s=localStorage.getItem(KEY);if(!s)return null;const g=JSON.parse(s);if(!g||g.v!==1||!g.spots||g.spots.length!==N)return null;
+  if(!Array.isArray(g.tree))g.tree=[];
+  if(typeof g.rings!=='number')g.rings=g.spots.filter(p=>p.st===4).length+(g.cleared||0)+Object.keys(g.ms||{}).length*3+((g.mainLv||1)-1);
+  return g;}catch(e){return null}}
 
+const sk=id=>G.tree.includes(id);
 const mature=()=>G.spots.filter(p=>p.st===4).length;
 const treeCount=()=>G.spots.filter(p=>p.st>=1).length;
 const rocksLeft=()=>G.spots.filter(p=>p.st===-1).length;
 const forestPct=()=>Math.round(G.spots.reduce((a,p)=>a+Math.max(0,p.st),0)/(4*N)*100);
 const lodgeDone=()=>G.beaver.prog>=100;
-const leafMult=()=>1+.25*G.up.leaf;
+const leafMult=()=>(1+.25*G.up.leaf)*(sk('sun')?1.15:1)*(sk('leaves')?1.3:1)*(sk('chorus')?1+.06*birds.length:1);
 const growMult=()=>(1+.15*G.up.soil)*(lodgeDone()?1.3:1);
-const tapPower=(lv=G.mainLv)=>1+lv+Math.floor(mature()*.3);
-const mainProd=()=>.15*G.mainLv*leafMult();
+const tapPower=(lv=G.mainLv)=>(1+lv+Math.floor(mature()*.3))*(sk('touch')?2:1);
+const mainProd=()=>.15*G.mainLv*leafMult()*(sk('root')?1.2:1);
+const growTime=st=>GROW[st]/growMult()/(sk('quick')&&st<=2?2:1);
+const beaverNeed=()=>sk('beav')?4:6;
 const seedEvery=()=>40/(1+.3*G.up.wind);
-const crackTime=()=>45/(1+.35*(G.up.root-1));
+const crackTime=()=>45/(1+.35*(G.up.root-1))/(sk('worm')?1.5:1);
 const cracking=()=>G.spots.filter(p=>p.st===-1&&p.crack>=0).length;
-const crackCost=()=>Math.round(12*Math.pow(1.4,G.cleared+cracking()));
+const crackCost=()=>Math.round(12*Math.pow(1.4,G.cleared+cracking())*(sk('moss')?.7:1));
 const birdUnlocked=()=>BIRDS.filter(b=>mature()>=b.need).length;
 const birdCap=()=>2+G.up.nest;
-function prodRate(){let r=mainProd();for(const p of G.spots)if(p.st>=2&&!p.pest)r+=PROD[p.st]*leafMult();return r;}
+function prodRate(){let r=mainProd();for(const p of G.spots)if(p.st>=2&&!p.pest)r+=PROD[p.st]*leafMult()*(p.st===4&&sk('giant')?1.6:1);return r;}
 
 /* ================= 일지 / 알림 ================= */
 function stamp(){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
@@ -224,7 +287,8 @@ let logDirty=true;
 function log(t,k){G.log.unshift({t,k:k||'',d:stamp()});if(G.log.length>100)G.log.length=100;logDirty=true;}
 let toastT=0;
 function toast(t){const el=$('toast');el.textContent=t;el.style.opacity=1;toastT=3.2;}
-function ms(key,story){if(G.ms[key])return;G.ms[key]=1;const m=MILESTONES.find(m=>m[0]===key);log(story,'story');toast('숲 일지 · '+m[1]);logDirty=true;}
+function ms(key,story){if(G.ms[key])return;G.ms[key]=1;G.rings+=3;const m=MILESTONES.find(m=>m[0]===key);log(story,'story');toast('숲 일지 · '+m[1]+' · 나이테 +3');logDirty=true;}
+function ring(n,off,x,y){G.rings+=n;if(!off&&x!=null)fx(`나이테 +${n}`,'#d9b88a',x,y);}
 
 /* ================= 소리 (Web Audio로 직접 합성) ================= */
 let AC=null,master=null,riverGain=null;
@@ -316,18 +380,21 @@ function hitPest(i){
   if(p.pest.hp<=0)killPest(i,'손');
 }
 function killPest(i,by){
-  const p=G.spots[i];const P=PESTS[p.pest.t];p.pest=null;G.beaten++;
+  const p=G.spots[i];const P=PESTS[p.pest.t];p.pest=null;G.beaten++;if(sk('heal'))p.hp=Math.min(100,p.hp+40);
   const r=2+G.mainLv;G.nut+=r;const g=geom(i);fx(`+${r}`,'#e5b44a',g.px,g.py);
-  if(by==='손')log(`${P.n}을(를) 떼어 냈다. 양분 +${r}`,'good');
+  if(by==='손'){log(`${P.n}을(를) 떼어 냈다. 양분 +${r}, 나이테 +1`,'good');ring(1,false,g.px,g.py-18);}
   ms('pest','처음으로 병충해를 물리쳤다. 나무가 다시 숨을 쉰다.');
 }
 function spawnPest(){
   const cand=G.spots.map((p,i)=>i).filter(i=>G.spots[i].st>=2&&!G.spots[i].pest);
   if(cand.length<2)return;
-  const i=cand[Math.floor(Math.random()*cand.length)];
-  let t;const r=Math.random(),mild=.25/(1+.3*G.up.soil);
-  if(r<mild)t='mildew';else{const bugs=['aphid','aphid','worm'];if(mature()>=3)bugs.push('beetle','worm');t=bugs[Math.floor(Math.random()*bugs.length)];}
-  G.spots[i].pest={t,hp:PESTS[t].hp,age:0};
+  const i=cand[Math.floor(Math.random()*cand.length)];const tp=G.spots[i];
+  const mild=.25/(1+.3*G.up.soil)*(sk('myco')?.5:1);
+  let bugs=['aphid','aphid','worm'];if(mature()>=3)bugs.push('beetle','worm');
+  if(sk('immune')&&tp.st===4)bugs=bugs.filter(b=>b==='beetle');
+  const t=(Math.random()<mild||!bugs.length)?'mildew':bugs[Math.floor(Math.random()*bugs.length)];
+  let hp=PESTS[t].hp;if(PESTS[t].bug&&sk('resin'))hp=Math.max(1,hp-1);
+  tp.pest={t,hp,age:0};
   log(`${SPECIES[G.spots[i].sp].n}에 ${PESTS[t].n}이(가) 생겼다! 눌러서 떼어 내자.`,'bad');sfx('bad');
 }
 function spreadMildew(i){
@@ -340,31 +407,33 @@ function step(dt,off){
   const m=mature(),gm=growMult();
   const rate=prodRate();G.nut+=rate*dt;
   G.seedT+=dt;const se=seedEvery();
-  while(G.seedT>=se){G.seedT-=se;const n=Math.min(SEED_MAX-G.seed,1+Math.floor(m/5));if(n<=0)continue;G.seed+=n;
+  while(G.seedT>=se){G.seedT-=se;const n=Math.min(SEED_MAX-G.seed,1+Math.floor(m/5)+(sk('pod')?1:0));if(n<=0)continue;G.seed+=n;
     if(!off){fx(`씨앗 +${n}`,'#e5b44a',MX,MY-treeH()-10);sfx('seed');}}
   for(let i=0;i<N;i++){const p=G.spots[i];
     if(p.st===-1){if(p.crack>=0){p.crack+=dt/crackTime();if(p.crack>=1){p.st=0;p.crack=-1;p.g=0;G.cleared++;
-      if(!off){burst(SPOTS[i].x,SPOTS[i].y-6,'#8d857c',8);sfx('crack');log('바위가 쩍 갈라졌다. 그 밑에 부드러운 흙이 있었다.','good');}
+      ring(1,off,SPOTS[i].x,SPOTS[i].y-26);
+      if(!off){burst(SPOTS[i].x,SPOTS[i].y-6,'#8d857c',8);sfx('crack');log('바위가 쩍 갈라졌다. 그 밑에 부드러운 흙이 있었다. 나이테 +1','good');}
       ms('rock','뿌리가 처음으로 바위를 쪼갰다. 돌 틈에서 흙 냄새가 난다.');
       if(rocksLeft()===0)ms('rocks','산에 남은 바위가 모두 흙이 되었다.');}}continue;}
     if(p.st<1)continue;
-    if(p.pest){if(off)continue;const P=PESTS[p.pest.t];p.hp-=P.dr*dt;p.pest.age+=dt;
-      if(p.pest.t==='mildew'&&p.pest.age>28){p.pest.age=0;spreadMildew(i);}
+    if(p.pest){if(off)continue;const P=PESTS[p.pest.t];p.hp-=P.dr*(sk('sap')?.75:1)*dt;p.pest.age+=dt;
+      if(p.pest.t==='mildew'&&p.pest.age>28&&!sk('myco')){p.pest.age=0;spreadMildew(i);}
       if(p.hp<=0){const nm=SPECIES[p.sp].n;log(`${nm}가 ${P.n} 때문에 말라 죽었다… 그루터기만 남았다.`,'bad');sfx('bad');
         p.st=0;p.g=0;p.hp=100;p.pest=null;p.stump=true;G.lost++;}
       continue;}
-    p.hp=Math.min(100,p.hp+3*dt);
-    if(p.st<4){p.g+=dt*gm/GROW[p.st];if(p.g>=1){p.g=0;p.st++;
+    p.hp=Math.min(100,p.hp+3*(sk('heal')?3:1)*dt);
+    if(p.st<4){p.g+=dt*gm*(sk('quick')&&p.st<=2?2:1)/GROW[p.st];if(p.g>=1){p.g=0;p.st++;
       if(!off&&p.st===4){fx('큰나무!','#cfe3ad',SPOTS[i].x,SPOTS[i].y-50);sfx('up');}
+      if(p.st===4){ring(1,off,SPOTS[i].x,SPOTS[i].y-66);}
       if(p.st===4)ms('mature','첫 큰나무가 자랐다. 이제 이 나무도 씨앗을 맺는다.');}}
   }
   if(!off){
     if(G.spots.filter(p=>p.st>=2).length>=2){G.pestT-=dt;
-      if(G.pestT<=0){spawnPest();G.pestT=rand(30,65)*(1+.12*G.up.soil)/(1+treeCount()*.02);}}
+      if(G.pestT<=0){spawnPest();G.pestT=rand(30,65)*(1+.12*G.up.soil)*(sk('phyto')?1.3:1)/(1+treeCount()*.02);}}
   }
-  if(!G.beaver.here&&mature()>=6){G.beaver.here=true;
+  if(!G.beaver.here&&mature()>=beaverNeed()){G.beaver.here=true;
     ms('beaver','강가 나무 그늘에 비버 한 마리가 나타났다. 나뭇가지를 물고 강으로 들어간다.');}
-  if(G.beaver.here&&!lodgeDone()){G.beaver.prog=Math.min(100,G.beaver.prog+(.12+.015*mature())*dt);
+  if(G.beaver.here&&!lodgeDone()){G.beaver.prog=Math.min(100,G.beaver.prog+(.12+.015*mature())*(sk('beav')?2:1)*dt);
     if(lodgeDone()){ms('lodge','비버 집이 완성되었다! 댐 덕분에 강이 넓은 연못이 되었다. 나무들이 30% 빨리 자란다.');
       if(G.sound&&AC&&riverGain)riverGain.gain.setTargetAtTime(.09,AC.currentTime,1);}}
   const f=forestPct();
@@ -392,7 +461,7 @@ const UPG=[
 ];
 function buy(k){
   const u=UPG.find(u=>u.k===k),lv=u.lv();if(lv>=u.max||(u.req&&!u.req()))return;const c=u.cost(lv);if(G.nut<c)return;
-  G.nut-=c;if(k==='main')G.mainLv++;else G.up[k]++;sfx('up');
+  G.nut-=c;if(k==='main'){G.mainLv++;ring(1,false,MX+40,MY-treeH()-4);}else G.up[k]++;sfx('up');
   if(k==='main'){fx(MAIN_NAME(G.mainLv),'#e5b44a',MX,MY-treeH()-16);burst(MX,MY-treeH()*.7,'#8fc85a',10);
     if(MAIN_NAME(G.mainLv)!==MAIN_NAME(G.mainLv-1))log(`어미나무가 ${MAIN_NAME(G.mainLv)}(으)로 자랐다.`,'story');}
   if(k==='nest')syncBirds();
@@ -413,9 +482,10 @@ function hint(h){$('hint').innerHTML=h;hintLock=3;}
 function defaultHint(){
   if(treeCount()===0)return '<b>빈 흙</b>을 눌러 씨앗을 심어 보세요. <b>어미나무</b>를 누르면 양분이 모여요.';
   const pest=G.spots.find(p=>p.pest);if(pest)return `나무에 <b>${PESTS[pest.pest.t].n}</b>이(가) 붙었어요. 빨간 표시를 눌러 떼어 내세요.`;
+  if(G.tree.length===0&&G.rings>=1)return '나이테가 생겼어요. <b>스킬 트리</b>에서 첫 칸을 열어 보세요.';
   if(G.seed>0&&G.spots.some(p=>p.st===0))return '씨앗이 있어요. <b>빈 흙</b>에 심어 보세요.';
   if(rocksLeft()>0&&!G.ms.rock)return '<b>바위</b>를 누르면 뿌리로 쪼개서 흙으로 만들 수 있어요.';
-  if(!G.beaver.here)return `큰나무가 <b>${6-mature()}그루</b> 더 자라면 강가에 손님이 찾아와요.`;
+  if(!G.beaver.here)return `큰나무가 <b>${beaverNeed()-mature()}그루</b> 더 자라면 강가에 손님이 찾아와요.`;
   if(!lodgeDone())return '비버가 강가 나무에서 가지를 모아 집을 짓고 있어요.';
   return '나무를 눌러 보면 자라는 정도를 볼 수 있어요.';
 }
@@ -427,18 +497,60 @@ function renderUI(){
   $('r-birds').textContent=birds.length;
   const nb=BIRDS.find(b=>mature()<b.need);
   $('r-birdn').textContent=birds.length?birds.map(b=>BIRDS.find(x=>x.k===b.k).n).join(', '):'큰나무 1그루면 와요';
-  if(!G.beaver.here){$('r-beaver').textContent='–';$('r-beavs').textContent=`큰나무 ${mature()}/6`;}
+  if(!G.beaver.here){$('r-beaver').textContent='–';$('r-beavs').textContent=`큰나무 ${mature()}/${beaverNeed()}`;}
   else{$('r-beaver').textContent=Math.floor(G.beaver.prog)+'%';$('r-beavs').textContent=lodgeDone()?'완성 · 성장 +30%':G.beaver.prog<30?'가지 모으는 중':G.beaver.prog<70?'댐 쌓는 중':'집 짓는 중';}
   $('sub').textContent=`어미나무 · ${MAIN_NAME(G.mainLv)} · 누르면 양분 +${tapPower()}`;
   const key=UPG.map(u=>u.lv()+':'+(G.nut>=u.cost(u.lv())?1:0)+':'+(u.req?u.req():1)).join('|');
   if(key!==lastUpsKey){lastUpsKey=key;renderUps();}
+  const rb=$('ringBadge');rb.textContent=G.rings;rb.classList.toggle('hot',anyBuyable());
+  if(!$('p-tree').hidden){const tk=G.rings+'|'+G.tree.join(',')+'|'+tsel;if(tk!==lastTreeKey){lastTreeKey=tk;renderTree();}}
   if(hintLock<=0)$('hint').innerHTML=defaultHint();
   if(logDirty){logDirty=false;
     $('ms').innerHTML=MILESTONES.map(m=>`<div class="${G.ms[m[0]]?'done':''}">${m[1]}</div>`).join('');
     $('log').innerHTML=G.log.map(l=>`<li class="${l.k}"><span class="d">${l.d}</span><span>${l.t}</span></li>`).join('');}
 }
-function selTab(b){const grow=b==='grow';$('t-grow').setAttribute('aria-selected',grow);$('t-book').setAttribute('aria-selected',!grow);$('p-grow').hidden=!grow;$('p-book').hidden=grow;}
-$('t-grow').onclick=()=>selTab('grow');$('t-book').onclick=()=>selTab('book');
+function selTab(b){for(const k of ['grow','tree','book']){$('t-'+k).setAttribute('aria-selected',k===b);$('p-'+k).hidden=k!==b;}
+  if(b==='tree'){lastTreeKey='';renderTree();const w=$('treewrap');w.scrollLeft=(w.scrollWidth-w.clientWidth)/2;}}
+$('t-grow').onclick=()=>selTab('grow');$('t-tree').onclick=()=>selTab('tree');$('t-book').onclick=()=>selTab('book');
+
+/* ================= 스킬 트리 ================= */
+let tsel='root',lastTreeKey='';
+const nodeOf=id=>TREE.find(n=>n.id===id);
+const reqOk=n=>(n.req||[]).every(sk);
+function nodeState(n){if(sk(n.id))return'own';if(!reqOk(n))return'lock';return G.rings>=n.cost?'can':'poor';}
+const anyBuyable=()=>TREE.some(n=>nodeState(n)==='can');
+function renderTree(){
+  const cell=82,xs=TREE.map(n=>n.x),ys=TREE.map(n=>n.y),minX=Math.min(...xs),minY=Math.min(...ys);
+  const TW=(Math.max(...xs)-minX+1)*cell,TH=(Math.max(...ys)-minY+1)*cell;
+  const pos=(x,y)=>[(x-minX)*cell+cell/2,(y-minY)*cell+cell/2];
+  const lines=TREE.flatMap(n=>(n.req||[]).map(r=>{const m=nodeOf(r);const[a,b]=pos(n.x,n.y),[c,d]=pos(m.x,m.y);const on=sk(n.id)&&sk(r);
+    return `<line x1="${a}" y1="${b}" x2="${c}" y2="${d}"${on?` style="stroke:${BR[n.b].c}"`:''}/>`;})).join('');
+  const labels=BR_LABEL.map(([b,x,y])=>{const[a,c]=pos(x,y);return `<text x="${a}" y="${c+4}" text-anchor="middle" style="fill:${BR[b].c}">${BR[b].n}</text>`;}).join('');
+  $('tree').style.width=TW+'px';$('tree').style.height=TH+'px';
+  $('tree').innerHTML=`<svg width="${TW}" height="${TH}" aria-hidden="true">${lines}${labels}</svg>`+TREE.map(n=>{const[x,y]=pos(n.x,n.y),st=nodeState(n);
+    return `<button class="node ${st}${n.id===tsel?' sel':''}" data-node="${n.id}" style="left:${x}px;top:${y}px;--c:${BR[n.b].c}" aria-label="${n.n}"><b>${n.n}</b><small>${st==='own'?'열림':'나이테 '+n.cost}</small></button>`;}).join('');
+  const n=nodeOf(tsel),st=nodeState(n);
+  const why=st==='own'?'이미 열려 있어요':st==='lock'?`먼저 ${(n.req||[]).filter(r=>!sk(r)).map(r=>nodeOf(r).n).join(', ')}을(를) 열어야 해요`:st==='poor'?`나이테가 ${n.cost-G.rings}개 더 필요해요`:'';
+  $('tdetail').innerHTML=`<span class="n">${n.n}<small style="color:${BR[n.b].c}">${BR[n.b].n}</small></span>
+    <button class="primary" data-open="${n.id}" ${st==='can'?'':'disabled'}>${st==='own'?'열림':'나이테 '+n.cost+'개로 열기'}</button>
+    <span class="e">${n.d}${why?' · '+why:''}</span>`;
+  $('ringN').textContent=G.rings;
+}
+function openNode(id){const n=nodeOf(id);if(nodeState(n)!=='can')return;G.rings-=n.cost;G.tree.push(id);sfx('up');
+  log(`스킬 트리 · ${n.n}을(를) 열었다. ${n.d}`,'story');toast(`${BR[n.b].n} · ${n.n}`);
+  if(id==='call'||id==='chorus')syncBirds();lastTreeKey='';lastUpsKey='';save();renderTree();renderUI();}
+$('tree').addEventListener('click',e=>{const b=e.target.closest('[data-node]');if(!b)return;
+  if(tsel===b.dataset.node&&nodeState(nodeOf(tsel))==='can'){openNode(tsel);return;}
+  tsel=b.dataset.node;lastTreeKey='';renderTree();});
+$('tdetail').addEventListener('click',e=>{const b=e.target.closest('[data-open]');if(b&&!b.disabled)openNode(b.dataset.open);});
+let tArmed=false,tArmT;
+$('treset').addEventListener('click',()=>{const b=$('treset');
+  if(!G.tree.length)return;
+  if(!tArmed){tArmed=true;b.textContent='정말 되돌릴까요? 한 번 더 누르세요';b.classList.add('warn');clearTimeout(tArmT);
+    tArmT=setTimeout(()=>{tArmed=false;b.textContent='전부 되돌리기 (나이테 돌려받기)';b.classList.remove('warn')},3000);return;}
+  tArmed=false;b.textContent='전부 되돌리기 (나이테 돌려받기)';b.classList.remove('warn');
+  const back=G.tree.reduce((a,id)=>a+nodeOf(id).cost,0);G.rings+=back;G.tree=[];tsel='root';
+  log(`스킬 트리를 모두 되돌리고 나이테 ${back}개를 돌려받았다.`,'');lastTreeKey='';lastUpsKey='';save();renderTree();renderUI();});
 
 /* ================= 모달 ================= */
 function openModal(h){$('card').innerHTML=h;$('modal').hidden=false;const b=$('card').querySelector('.primary')||$('card').querySelector('button');b&&b.focus();}
@@ -458,6 +570,7 @@ function showIntro(){openModal(`<h3>민둥산의 묘목</h3>
 <li><b>바위</b>는 양분을 들여 뿌리로 쪼개면 흙이 돼요.</li>
 <li>나무에 <b>병충해</b>가 생기면 눌러서 떼어 내세요. 놔두면 나무가 죽어요.</li>
 <li>숲이 자라면 <b>새</b>가 와서 노래하고 벌레를 잡고, 강가엔 <b>비버</b>가 집을 지어요.</li>
+<li>큰나무, 쪼갠 바위, 손으로 뗀 병충해마다 <b>나이테</b>가 생겨요. <b>스킬 트리</b>에서 면역·강화·자연의 벗 갈래를 열 수 있어요.</li>
 </ul>
 <p>창을 닫아도 숲은 자라요 (최대 8시간).</p>
 <div class="row"><button class="ghost" data-start="quiet">조용히 시작</button><button class="primary" data-start="sound">새소리와 함께 시작</button></div>`);}
@@ -477,7 +590,7 @@ $('reset').addEventListener('click',()=>{const b=$('reset');
   armed=false;b.textContent='새로 시작';b.classList.remove('warn');newGame();});
 $('snd').addEventListener('click',()=>setSound(!G.sound));
 function newGame(){const s=G&&G.sound;G=fresh();G.sound=!!s;birds=[];BV.x=470;
-  log('바람이 멎은 새벽, 강가 바위틈에서 작은 싹이 고개를 들었다.','story');save();closeModal();lastUpsKey='';logDirty=true;
+  log('바람이 멎은 새벽, 강가 바위틈에서 작은 싹이 고개를 들었다.','story');save();closeModal();lastUpsKey='';lastTreeKey='';tsel='root';logDirty=true;
   G.started=false;showIntro();}
 
 /* ================= 그리기 ================= */
@@ -595,7 +708,7 @@ function drawBird(b,t){
 function updateBirds(dt){
   const bugs=G.spots.map((p,i)=>i).filter(i=>G.spots[i].pest&&PESTS[G.spots[i].pest.t].bug);
   const perches=[{x:MX,y:MY-treeH()*.85}].concat(G.spots.map((p,i)=>i).filter(i=>G.spots[i].st===4).map(i=>{const g=geom(i);return{x:g.cx,y:g.cy-g.r*.6};}));
-  const eatEvery=9/(1+.3*G.up.nest);
+  const eatEvery=9/(1+.3*G.up.nest)/(sk('call')?1.5:1);
   for(const b of birds){
     b.note=Math.max(0,b.note-dt);b.eat-=dt;
     if(b.target!=null&&!(G.spots[b.target].pest&&PESTS[G.spots[b.target].pest.t].bug))b.target=null;
@@ -700,8 +813,8 @@ function describe(h){
   const p=G.spots[h.i];
   if(p.st===-1)return p.crack>=0?`<b>바위</b> · 쪼개는 중 ${Math.floor(p.crack*100)}%`:`<b>바위</b> · 눌러서 뿌리로 쪼개기 (양분 ${fmt(crackCost())}, ${Math.round(crackTime())}초)`;
   if(p.st===0)return G.seed>0?`<b>빈 흙</b> · 눌러서 씨앗 심기`:`<b>빈 흙</b> · 씨앗이 생기면 심을 수 있어요`;
-  const nm=SPECIES[p.sp].n,left=p.st<4?Math.ceil((1-p.g)*GROW[p.st]/growMult()):0;
-  return `<b>${nm}</b> · ${STAGE[p.st]} · 건강 ${Math.round(p.hp)}`+(p.pest?` · <b>${PESTS[p.pest.t].n}</b> 붙음`:p.st<4?` · 다음 단계까지 ${left}초`:` · 양분 초당 ${(PROD[4]*leafMult()).toFixed(1)}`);
+  const nm=SPECIES[p.sp].n,left=p.st<4?Math.ceil((1-p.g)*growTime(p.st)):0;
+  return `<b>${nm}</b> · ${STAGE[p.st]} · 건강 ${Math.round(p.hp)}`+(p.pest?` · <b>${PESTS[p.pest.t].n}</b> 붙음`:p.st<4?` · 다음 단계까지 ${left}초`:` · 양분 초당 ${(PROD[4]*leafMult()*(sk('giant')?1.6:1)).toFixed(1)}`);
 }
 function toLocal(e){const r=cv.getBoundingClientRect();return[(e.clientX-r.left)/r.width*W,(e.clientY-r.top)/r.height*H];}
 cv.addEventListener('pointermove',e=>{if(e.pointerType!=='mouse')return;const[x,y]=toLocal(e);hover=pick(x,y);const d=describe(hover);if(d){$('hint').innerHTML=d;hintLock=.4;}});
