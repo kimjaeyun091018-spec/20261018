@@ -142,24 +142,40 @@ let speed = 1; // 테스트에선 0
 
 const fmt = n => n.toLocaleString('ko-KR');
 const sleep = ms => new Promise(r => {
-  const fast = S && S.players[0].human && (S.players[0].folded || S.players[0].out) ? 0.45 : 1;
+  const me = S && S.players[S.me || 0];
+  const fast = S && !S.multi && me && me.human && (me.folded || me.out) ? 0.45 : 1;
   setTimeout(r, ms * speed * fast);
 });
 
-function newGame(nBots, allBots = false, mode = 'holdem') {
-  const mk = (o, human) => ({
-    ...o, human, chips: START_CHIPS, hand: [], bet: 0, total: 0,
+// human: 이 브라우저의 사람 · remote: 친구(피어 id) · 둘 다 아니면 봇
+function mkPlayer(o) {
+  return {
+    human: false, remote: null, chips: START_CHIPS, hand: [], bet: 0, total: 0,
     folded: false, allIn: false, out: false, acted: false, raises: 0,
-    last: '', show: false, winner: false, score: null,
-  });
-  const players = [mk({ name: '나', avatar: '🙂', style: BOT_PROFILES[1] }, !allBots)];
-  for (let i = 0; i < nBots; i++) players.push(mk({ style: BOT_PROFILES[i] , ...BOT_PROFILES[i] }, false));
+    last: '', show: false, winner: false, score: null, ...o,
+  };
+}
+function startState(players, mode) {
   S = {
-    players, dealer: Math.floor(Math.random() * players.length) - 1 + players.length,
+    players, dealer: Math.floor(Math.random() * players.length),
     handNo: 0, level: 0, board: [], deck: [], stage: '', currentBet: 0, minRaise: 0,
     toAct: -1, highlight: new Set(), msg: '', bbSeat: -1, sbSeat: -1, mode, stageLabel: '',
+    me: 0, multi: false, roomCode: '',
   };
-  S.dealer %= players.length;
+}
+function newGame(nBots, allBots = false, mode = 'holdem') {
+  const players = [mkPlayer({ name: '나', avatar: '🙂', style: BOT_PROFILES[1], human: !allBots })];
+  for (let i = 0; i < nBots; i++) players.push(mkPlayer({ ...BOT_PROFILES[i], style: BOT_PROFILES[i] }));
+  startState(players, mode);
+}
+
+// multi.js가 채우는 연결 고리
+const hooks = { render: null, log: null, ask: null, wait: null, end: null };
+
+function getAction(p) {
+  if (p.human) return isSeven() ? humanActionSeven(p) : humanAction(p);
+  if (p.remote && hooks.ask) return hooks.ask(p, 'bet');
+  return isSeven() ? botActionSeven(p) : botAction(p);
 }
 
 const P = () => S.players;
@@ -224,9 +240,7 @@ async function bettingRound(start) {
     const p = P()[i];
     if (p.out || p.folded || p.allIn || (p.acted && p.bet === S.currentBet)) { i = nextIn(i); continue; }
     S.toAct = i; render();
-    const a = isSeven()
-      ? (p.human ? await humanActionSeven(p) : await botActionSeven(p))
-      : (p.human ? await humanAction(p) : await botAction(p));
+    const a = await getAction(p);
     act(p, a);
     S.toAct = -1; render();
     i = nextIn(i);
@@ -430,16 +444,20 @@ function cardHTML(c, opts = {}) {
   return `<div class="${cls.join(' ')}"><span class="cr">${rs(c.r)}</span><span class="cs">${SUIT[c.s]}</span><span class="big">${SUIT[c.s]}</span></div>`;
 }
 
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let boardShown = 0;
+let seen = []; // 자리별로 이미 그린 카드 수 (새 카드만 애니메이션)
 function render() {
   if (!HAS_DOM || !S) return;
   const players = P();
+  const me = S.me || 0, n = players.length;
   const narrow = window.matchMedia('(max-width: 640px)').matches;
   let pos = (narrow ? SEAT_POS_M : SEAT_POS)[players.length];
   // 7포커는 가운데 공용 카드가 없으니, 세로 화면에선 아래쪽 옆자리를 조금 올려 내 카드와 안 겹치게
   if (narrow && isSeven()) pos = pos.map(([x, y]) => [x, y > 60 && y < 80 ? 58 : y]);
   const [sb, bb] = blinds();
-  $('#info').textContent = isSeven() ? `7포커 · ${S.handNo}판 · 참가비 ${fmt(sb)}` : `홀덤 · ${S.handNo}판 · 블라인드 ${fmt(sb)}/${fmt(bb)}`;
+  $('#info').textContent = (S.roomCode ? `방 ${S.roomCode} · ` : '') +
+    (isSeven() ? `7포커 · ${S.handNo}판 · 참가비 ${fmt(sb)}` : `홀덤 · ${S.handNo}판 · 블라인드 ${fmt(sb)}/${fmt(bb)}`);
 
   const pot = potTotal();
   $('#pot').innerHTML = pot > 0 ? `팟 <b>${fmt(pot)}</b>` : '';
@@ -459,44 +477,48 @@ function render() {
 
   let html = '';
   players.forEach((p, i) => {
-    const [x, y] = pos[i];
+    const isMe = i === me;
+    const [x, y] = pos[(i - me + n) % n];
     const cls = ['seat'];
-    if (p.human) cls.push('me');
+    if (isMe) cls.push('me');
     if (p.out) cls.push('out');
     if (p.folded && !p.out) cls.push('folded');
     if (S.toAct === i) cls.push('active');
     if (p.winner) cls.push('winner');
-    const faceUp = p.human ? !p.out : p.show;
+    const faceUp = isMe ? !p.out : p.show;
     let cards = '';
-    if (!p.out && !(p.folded && !p.human)) {
+    let sn = seen[i];
+    if (!sn || sn.hand !== S.handNo || sn.n > p.hand.length) sn = seen[i] = { hand: S.handNo, n: 0, up: false };
+    if (!p.out && !(p.folded && !isMe)) {
       p.hand.forEach((c, k) => {
-        const anim = k >= (p._seen || 0);
+        const anim = k >= sn.n;
         const up = faceUp || (isSeven() && c.up);
-        const flip = faceUp && !p._up && !p.human && !(isSeven() && c.up);
-        cards += cardHTML(c, { back: !up, anim, flip, dimNonHl: true, hid: isSeven() && p.human && !c.up && S.stage !== 'choose' });
+        const flip = faceUp && !sn.up && !isMe && !(isSeven() && c.up);
+        cards += cardHTML(c, { back: !up, anim, flip, dimNonHl: true, hid: isSeven() && isMe && !c.up && S.stage !== 'choose' });
       });
-      p._seen = p.hand.length;
-      p._up = faceUp;
     }
+    sn.n = p.hand.length; sn.up = faceUp;
     const dealer = i === S.dealer && !p.out ? '<span class="dbtn">D</span>' : '';
-    const tag = p.out ? '탈락' : (p.last || '');
+    const tag = esc(p.out ? '탈락' : (p.last || ''));
     // 베팅 칩은 테이블 가운데 쪽으로
     const bx = x + (50 - x) * 0.42, by = y + (48 - y) * 0.42;
     if (p.bet > 0) html += `<div class="betchip" style="left:${bx}%;top:${by}%"><i></i>${fmt(p.bet)}</div>`;
     html += `<div class="${cls.join(' ')}" style="left:${x}%;top:${y}%">
       <div class="hole${isSeven() ? ' seven' : ''}">${cards}</div>
-      <div class="plate">${dealer}<span class="av">${p.avatar}</span>
-        <div class="nm"><b>${p.name}</b><span>${fmt(p.chips)}</span></div></div>
+      <div class="plate">${dealer}<span class="av">${esc(p.avatar)}</span>
+        <div class="nm"><b>${esc(p.name)}${isMe && S.multi ? ' (나)' : ''}</b><span>${fmt(p.chips)}</span></div></div>
       ${tag ? `<div class="tag${p.winner ? ' win' : ''}">${tag}</div>` : ''}
     </div>`;
   });
   $('#seats').innerHTML = html;
+  if (hooks.render) hooks.render();
 }
 
 let logLines = [];
 function log(text, kind = '') {
   if (!HAS_DOM) return;
-  logLines.push(`<div class="${kind}">${text}</div>`);
+  if (hooks.log) hooks.log(text, kind);
+  logLines.push(`<div class="${['sys', 'win'].includes(kind) ? kind : ''}">${esc(text)}</div>`);
   if (logLines.length > 60) logLines = logLines.slice(-60);
   const el = $('#log');
   el.innerHTML = logLines.join('');
@@ -562,23 +584,42 @@ function humanAction(p) {
   });
 }
 
-function waitNext(label) {
+function waitNext(label, autoMs = 0) {
   return new Promise(done => {
     const el = $('#controls');
     el.innerHTML = `<div class="row"><button class="act next">${label}</button></div>`;
     el.classList.add('on');
-    el.onclick = e => {
-      if (!e.target.closest('button')) return;
-      el.innerHTML = ''; el.classList.remove('on'); done();
-    };
+    const btn = el.querySelector('button');
+    let timer = null;
+    const finish = () => { clearTimeout(timer); el.innerHTML = ''; el.classList.remove('on'); done(); };
+    if (autoMs) {
+      let left = Math.ceil(autoMs / 1000);
+      const tick = () => { if (left <= 0) return finish(); btn.textContent = `${label} (${left})`; left--; timer = setTimeout(tick, 1000); };
+      tick();
+    }
+    el.onclick = e => { if (e.target.closest('button')) finish(); };
   });
 }
 
 async function gameLoop() {
   while (true) {
     await (isSeven() ? playHandSeven() : playHand());
-    const me = P()[0];
+    const me = P()[S.me];
     const alive = P().filter(p => p.chips > 0);
+    if (S.multi) {
+      const humansLeft = P().some(p => (p.human || p.remote) && p.chips > 0);
+      if (alive.length === 1 || !humansLeft) {
+        await sleep(900);
+        const w = alive.length === 1 ? alive[0] : null;
+        if (hooks.end) hooks.end(w ? P().indexOf(w) : -1);
+        showEnd(w === me ? '🏆 우승!' : w ? `🏆 ${w.name} 우승` : '게임 끝',
+          w ? `${S.handNo}판 만에 끝났어요. 최종 칩 ${fmt(w.chips)}` : '사람은 모두 탈락했어요.');
+        return;
+      }
+      if (hooks.wait) hooks.wait(6000);
+      await waitNext('다음 판 ▶', 6000);
+      continue;
+    }
     if (me.chips <= 0) {
       await sleep(900);
       showEnd('💸 칩을 모두 잃었어요', `${S.handNo}판 동안 버텼어요. 다시 도전해 볼까요?`);
@@ -591,6 +632,14 @@ async function gameLoop() {
     }
     await waitNext('다음 판 ▶');
   }
+}
+
+function prepareTable(mode) {
+  for (const id of ['#start', '#end', '#lobby']) { const el = $(id); if (el) el.hidden = true; }
+  logLines = []; boardShown = 0; seen = [];
+  $('#log').innerHTML = ''; $('#controls').innerHTML = '';
+  document.title = mode === 'seven' ? '포커 · 7포커' : '포커 · 텍사스 홀덤';
+  $('.logo').textContent = mode === 'seven' ? '♣ 7포커' : '♠ 홀덤';
 }
 
 function showEnd(title, sub) {
@@ -615,17 +664,19 @@ if (HAS_DOM) {
     for (const x of $('#botCount').children) x.classList.toggle('on', x === b);
   };
   const start = () => {
-    $('#start').hidden = true; $('#end').hidden = true;
-    logLines = []; boardShown = 0;
     newGame(nBots, false, mode);
-    document.title = mode === 'seven' ? '포커 · 7포커' : '포커 · 텍사스 홀덤';
-    $('.logo').textContent = mode === 'seven' ? '♣ 7포커' : '♠ 홀덤';
+    prepareTable(mode);
     render();
     gameLoop();
   };
   $('#btnStart').onclick = start;
-  $('#btnAgain').onclick = () => { $('#end').hidden = true; $('#start').hidden = false; };
-  $('#btnNew').onclick = () => { if (!S || confirm('지금 게임을 그만두고 새로 시작할까요?')) location.reload(); };
+  $('#btnAgain').onclick = () => {
+    if (S && S.multi) { location.href = location.pathname; return; }
+    $('#end').hidden = true; $('#start').hidden = false;
+  };
+  $('#btnNew').onclick = () => {
+    if (!S || confirm(S.multi ? '방에서 나갈까요?' : '지금 게임을 그만두고 새로 시작할까요?')) location.href = location.pathname;
+  };
   const showRule = t => {
     for (const b of $('#ruleTabs').children) b.classList.toggle('on', b.dataset.t === t);
     for (const d of document.querySelectorAll('[data-rule]')) d.hidden = d.dataset.rule !== t;

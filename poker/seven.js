@@ -120,7 +120,7 @@ function score3(cs) {
   if (rr.length === 3 && rr[2] - rr[0] <= 4) v += 8;
   return v;
 }
-function botChoose(p) {
+function botChoice(p) {
   let best = -1, bi = 0;
   for (let d = 0; d < p.hand.length; d++) {
     const v = score3(p.hand.filter((_, i) => i !== d)) + Math.random() * 2;
@@ -129,7 +129,12 @@ function botChoose(p) {
   const rest = p.hand.filter((_, i) => i !== bi);
   const cnt = r => rest.filter(c => c.r === r).length;
   const open = rest.filter(c => cnt(c.r) === 1).sort((a, b) => a.r - b.r)[0] || rest[rest.length - 1];
-  applyChoice(p, { discard: p.hand[bi], open });
+  return { discard: p.hand[bi], open };
+}
+function getChoice(p) {
+  if (p.human) return humanChoose(p);
+  if (p.remote && hooks.ask) return hooks.ask(p, 'choose');
+  return botChoice(p);
 }
 function applyChoice(p, { discard, open }) {
   p.hand = p.hand.filter(c => c !== discard && c !== open).concat([open]);
@@ -176,8 +181,10 @@ async function playHandSeven() {
   }
 
   S.stage = 'choose'; S.stageLabel = '버리기 · 오픈';
-  for (const p of live) if (!p.human) botChoose(p);
-  for (const p of live) if (p.human) { render(); applyChoice(p, await humanChoose(p)); }
+  // 모두 동시에 고르고, 다 고르면 한꺼번에 오픈
+  render();
+  const choices = await Promise.all(live.map(p => getChoice(p)));
+  live.forEach((p, i) => applyChoice(p, choices[i]));
   render(); await sleep(450);
 
   for (const n of [4, 5, 6, 7]) {

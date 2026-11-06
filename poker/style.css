@@ -168,3 +168,25 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; }
   .hole.seven .card + .card { margin-left: calc(var(--cw) * -0.55); }
   .seat.me .hole.seven .card + .card { margin-left: calc(var(--cw) * -0.42); }
 }
+
+/* 친구와 하기 */
+.pane { display: flex; flex-direction: column; gap: 12px; }
+.pane[hidden] { display: none; }
+.field { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: #0f1913; color: var(--text); font: inherit; font-size: 16px; }
+.field:focus { outline: none; border-color: var(--gold); }
+.joinrow { display: flex; gap: 8px; }
+.joinrow .field { flex: 1; }
+.joinrow .primary { padding: 0 20px; }
+.code-in { text-transform: uppercase; letter-spacing: 4px; text-align: center; font-weight: 700; }
+.err { margin: 0; min-height: 18px; color: #ff8f96; font-size: 13px; }
+.err.info { color: var(--muted); }
+.sub.small { font-size: 12px; line-height: 1.6; }
+button:disabled { opacity: .45; cursor: default; }
+.roomcode { font-family: 'Black Han Sans', sans-serif; font-size: 44px; letter-spacing: 8px; color: var(--gold); }
+.plist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.plist li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #1d2d24; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; }
+.plist li .av { font-size: 18px; width: 26px; height: 26px; }
+.plist li em { margin-left: auto; font-style: normal; font-size: 11px; color: #2a1d00; background: var(--gold); padding: 1px 8px; border-radius: 999px; }
+.plist li.bots { color: var(--muted); }
+#hostOpts { display: flex; flex-direction: column; gap: 10px; }
+#hostOpts[hidden] { display: none; }

@@ -38,6 +38,11 @@
   <div id="start" class="overlay">
     <div class="panel">
       <div class="title">♠ ♥ 포커 ♦ ♣</div>
+      <div id="playTabs" class="tabs">
+        <button data-p="solo" class="on">혼자 하기</button>
+        <button data-p="multi">친구와 하기</button>
+      </div>
+      <div id="soloPane" class="pane">
       <p class="label">게임</p>
       <div id="mode" class="seg">
         <button data-m="holdem" class="on">텍사스 홀덤</button>
@@ -53,7 +58,45 @@
         <button data-n="5">5명</button>
       </div>
       <button id="btnStart" class="primary big">게임 시작</button>
+      </div>
+      <div id="multiPane" class="pane" hidden>
+        <p class="label">닉네임</p>
+        <input id="nick" class="field" maxlength="10" placeholder="닉네임 (최대 10자)" autocomplete="off">
+        <button id="btnHost" class="primary big">방 만들기</button>
+        <p class="label">또는 친구 방에 참가</p>
+        <div class="joinrow">
+          <input id="joinCode" class="field code-in" maxlength="5" placeholder="방 코드 5자리" autocomplete="off" autocapitalize="characters">
+          <button id="btnJoin" class="primary">참가</button>
+        </div>
+        <p id="netErr" class="err"></p>
+        <p class="sub small">최대 6명까지 같이 할 수 있고, 빈자리는 봇으로 채울 수 있어요.<br>방장이 게임을 진행하니 방장은 끝까지 창을 닫지 마세요.</p>
+      </div>
       <button class="ghost" data-open-rules>규칙 · 족보 보기</button>
+    </div>
+  </div>
+
+  <div id="lobby" class="overlay" hidden>
+    <div class="panel">
+      <p class="label">방 코드</p>
+      <div id="roomCode" class="roomcode">-----</div>
+      <button id="btnCopy" class="ghost">🔗 초대 링크 복사</button>
+      <p class="label">참가자 <span id="lobbyCount"></span></p>
+      <ul id="lobbyList" class="plist"></ul>
+      <div id="hostOpts">
+        <p class="label">게임</p>
+        <div id="lmode" class="seg">
+          <button data-m="holdem" class="on">텍사스 홀덤</button>
+          <button data-m="seven">7포커</button>
+        </div>
+        <p class="label">봇 추가</p>
+        <div id="lbots" class="seg">
+          <button data-n="0">0</button><button data-n="1" class="on">1</button><button data-n="2">2</button>
+          <button data-n="3">3</button><button data-n="4">4</button><button data-n="5">5</button>
+        </div>
+        <button id="btnLobbyStart" class="primary big">게임 시작</button>
+      </div>
+      <p id="lobbyWait" class="sub" hidden>방장이 게임을 시작하길 기다리는 중…</p>
+      <button id="btnLeave" class="ghost">나가기</button>
     </div>
   </div>
 
@@ -121,7 +164,9 @@
     </div>
   </div>
 
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
   <script src="poker.js"></script>
   <script src="seven.js"></script>
+  <script src="multi.js"></script>
 </body>
 </html>
