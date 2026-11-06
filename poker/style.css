@@ -149,3 +149,22 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; }
   .log { height: 90px; }
   .card .cr { left: 3px; top: 3px; } .card .cs { left: 3px; } .card .big { right: 3px; }
 }
+
+/* 7포커 */
+.hole.seven .card + .card { margin-left: calc(var(--cw) * -0.42); }
+.seat.me .hole.seven .card + .card { margin-left: calc(var(--cw) * -0.18); }
+.card.hid { transform: translateY(7px); box-shadow: 0 0 0 2px #7d6bd8, 0 2px 4px rgba(0,0,0,.4); }
+.card.hid.hl { transform: translateY(-6px); box-shadow: 0 0 0 3px var(--gold), 0 6px 14px rgba(0,0,0,.5); }
+.stage { font-family: 'Black Han Sans', sans-serif; font-size: 22px; color: rgba(255,255,255,.55); letter-spacing: 2px; padding: 6px 0; }
+.pick { gap: 10px; }
+.pick button { background: none; padding: 0; border-radius: 8px; --cw: 64px; transition: transform .15s; }
+.pick button:hover { transform: translateY(-6px); }
+.tabs { display: flex; gap: 6px; }
+.tabs button { flex: 1; padding: 8px 0; background: #1d2d24; border: 1px solid var(--line); border-radius: 10px; }
+.tabs button.on { background: var(--gold); color: #2a1d00; font-weight: 700; border-color: var(--gold); }
+.turn b { color: #fff; }
+@media (max-width: 640px) { .pick button { --cw: 54px; } .stage { font-size: 18px; } }
+@media (max-width: 640px) {
+  .hole.seven .card + .card { margin-left: calc(var(--cw) * -0.55); }
+  .seat.me .hole.seven .card + .card { margin-left: calc(var(--cw) * -0.42); }
+}

@@ -37,8 +37,13 @@
 
   <div id="start" class="overlay">
     <div class="panel">
-      <div class="title">♠ ♥ 텍사스 홀덤 ♦ ♣</div>
-      <p class="sub">조커 없는 52장 · 시작 칩 1,000 · 블라인드는 8판마다 올라가요</p>
+      <div class="title">♠ ♥ 포커 ♦ ♣</div>
+      <p class="label">게임</p>
+      <div id="mode" class="seg">
+        <button data-m="holdem" class="on">텍사스 홀덤</button>
+        <button data-m="seven">7포커</button>
+      </div>
+      <p id="modeSub" class="sub">조커 없는 52장 · 시작 칩 1,000 · 블라인드는 8판마다 올라가요</p>
       <p class="label">상대 수</p>
       <div id="botCount" class="seg">
         <button data-n="1">1명</button>
@@ -63,6 +68,11 @@
   <div id="rules" class="overlay" hidden>
     <div class="panel rules">
       <div class="title small">규칙 · 족보</div>
+      <div class="tabs" id="ruleTabs">
+        <button data-t="holdem" class="on">텍사스 홀덤</button>
+        <button data-t="seven">7포커</button>
+      </div>
+      <div data-rule="holdem">
       <ol class="howto">
         <li>각자 카드 2장을 받고, 가운데에 공용 카드 5장이 3장 → 1장 → 1장 순서로 깔려요.</li>
         <li>내 카드 2장 + 공용 카드 5장 중 <b>가장 좋은 5장</b>으로 족보를 만들어요.</li>
@@ -82,10 +92,36 @@
         <tr><td>9</td><td>원페어</td><td>같은 숫자 2장</td></tr>
         <tr><td>10</td><td>하이카드</td><td>아무것도 없을 때 가장 높은 카드</td></tr>
       </table>
+      </div>
+      <div data-rule="seven" hidden>
+      <ol class="howto">
+        <li>참가비를 내고 카드 4장을 받아요. <b>1장은 버리고</b>, 남은 3장 중 <b>1장을 오픈</b>(앞면)해요.</li>
+        <li>4구 · 5구 · 6구는 앞면으로, 마지막 7구는 <b>히든</b>(뒷면)으로 받아요. 카드를 받을 때마다 베팅해요.</li>
+        <li>보이는 카드가 가장 좋은 사람(<b>보스</b>)부터 베팅을 시작해요.</li>
+        <li><b>삥</b> 참가비만큼 베팅 · <b>따당</b> 앞사람 베팅의 2배 · <b>하프</b> 팟의 절반만큼 더 · <b>콜</b> 따라가기 · <b>다이</b> 포기. 한 라운드에 레이즈는 4번까지.</li>
+        <li>7장 중 가장 좋은 5장으로 비교해요. 족보와 숫자가 같으면 <b>무늬</b>로: ♠ &gt; ◆ &gt; ♥ &gt; ♣</li>
+      </ol>
+      <table class="ranks">
+        <tr><td>1</td><td>로열 스트레이트 플러시</td><td>같은 무늬 10·J·Q·K·A</td></tr>
+        <tr><td>2</td><td>백 스트레이트 플러시</td><td>같은 무늬 A·2·3·4·5</td></tr>
+        <tr><td>3</td><td>스트레이트 플러시</td><td>같은 무늬로 이어진 5장</td></tr>
+        <tr><td>4</td><td>포카드</td><td>같은 숫자 4장</td></tr>
+        <tr><td>5</td><td>풀하우스</td><td>트리플 + 원페어</td></tr>
+        <tr><td>6</td><td>플러시</td><td>같은 무늬 5장</td></tr>
+        <tr><td>7</td><td>마운틴</td><td>10·J·Q·K·A</td></tr>
+        <tr><td>8</td><td>백 스트레이트</td><td>A·2·3·4·5</td></tr>
+        <tr><td>9</td><td>스트레이트</td><td>이어진 숫자 5장</td></tr>
+        <tr><td>10</td><td>트리플</td><td>같은 숫자 3장</td></tr>
+        <tr><td>11</td><td>투페어</td><td>페어 2개</td></tr>
+        <tr><td>12</td><td>원페어</td><td>같은 숫자 2장</td></tr>
+        <tr><td>13</td><td>탑</td><td>가장 높은 카드</td></tr>
+      </table>
+      </div>
       <button id="btnCloseRules" class="primary">닫기</button>
     </div>
   </div>
 
   <script src="poker.js"></script>
+  <script src="seven.js"></script>
 </body>
 </html>

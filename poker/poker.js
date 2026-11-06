@@ -146,7 +146,7 @@ const sleep = ms => new Promise(r => {
   setTimeout(r, ms * speed * fast);
 });
 
-function newGame(nBots, allBots = false) {
+function newGame(nBots, allBots = false, mode = 'holdem') {
   const mk = (o, human) => ({
     ...o, human, chips: START_CHIPS, hand: [], bet: 0, total: 0,
     folded: false, allIn: false, out: false, acted: false, raises: 0,
@@ -157,12 +157,13 @@ function newGame(nBots, allBots = false) {
   S = {
     players, dealer: Math.floor(Math.random() * players.length) - 1 + players.length,
     handNo: 0, level: 0, board: [], deck: [], stage: '', currentBet: 0, minRaise: 0,
-    toAct: -1, highlight: new Set(), msg: '', bbSeat: -1, sbSeat: -1,
+    toAct: -1, highlight: new Set(), msg: '', bbSeat: -1, sbSeat: -1, mode, stageLabel: '',
   };
   S.dealer %= players.length;
 }
 
 const P = () => S.players;
+const isSeven = () => S && S.mode === 'seven';
 const blinds = () => BLINDS[S.level];
 const inHand = () => P().filter(p => !p.out && !p.folded);
 const canAct = () => inHand().filter(p => !p.allIn);
@@ -193,13 +194,13 @@ function act(p, a) {
       S.currentBet = to;
       for (const q of P()) if (q !== p) q.acted = false;
       p.raises++;
-      p.last = p.allIn ? '올인' : (wasBet ? `베팅 ${fmt(to)}` : `레이즈 ${fmt(to)}`);
+      p.last = p.allIn ? '올인' : (a.label ? `${a.label} ${fmt(to)}` : wasBet ? `베팅 ${fmt(to)}` : `레이즈 ${fmt(to)}`);
       log(`${p.name}: ${p.allIn ? `올인 (${fmt(to)})` : p.last}`);
     }
   }
   if (type === 'fold') {
     if (toCall === 0) type = 'call'; // 공짜로 볼 수 있으면 폴드 대신 체크
-    else { p.folded = true; p.last = '폴드'; log(`${p.name}: 폴드`); }
+    else { const w = isSeven() ? '다이' : '폴드'; p.folded = true; p.last = w; log(`${p.name}: ${w}`); }
   }
   if (type === 'call') {
     if (toCall === 0) { p.last = '체크'; log(`${p.name}: 체크`); }
@@ -223,7 +224,9 @@ async function bettingRound(start) {
     const p = P()[i];
     if (p.out || p.folded || p.allIn || (p.acted && p.bet === S.currentBet)) { i = nextIn(i); continue; }
     S.toAct = i; render();
-    const a = p.human ? await humanAction(p) : await botAction(p);
+    const a = isSeven()
+      ? (p.human ? await humanActionSeven(p) : await botActionSeven(p))
+      : (p.human ? await humanAction(p) : await botAction(p));
     act(p, a);
     S.toAct = -1; render();
     i = nextIn(i);
@@ -240,7 +243,7 @@ function endStreet() {
   S.minRaise = blinds()[1];
 }
 
-async function playHand() {
+function beginHand() {
   for (const p of P()) {
     if (p.chips <= 0) p.out = true;
     Object.assign(p, { hand: [], bet: 0, total: 0, folded: p.out, allIn: false, acted: false, raises: 0, last: '', show: false, winner: false, score: null, _seen: 0, _up: false });
@@ -249,11 +252,18 @@ async function playHand() {
   S.highlight = new Set();
   S.msg = '';
   const lvl = Math.min(BLINDS.length - 1, Math.floor((S.handNo - 1) / HANDS_PER_LEVEL));
-  if (lvl !== S.level) { S.level = lvl; log(`⬆ 블라인드 상승: ${fmt(blinds()[0])} / ${fmt(blinds()[1])}`, 'sys'); }
-  const [sb, bb] = blinds();
+  if (lvl !== S.level) {
+    S.level = lvl;
+    log(isSeven() ? `⬆ 참가비 상승: ${fmt(blinds()[0])}` : `⬆ 블라인드 상승: ${fmt(blinds()[0])} / ${fmt(blinds()[1])}`, 'sys');
+  }
   S.dealer = nextIn(S.dealer);
-  S.board = []; S.deck = newDeck(); S.stage = 'preflop';
+  S.board = []; S.deck = newDeck(); S.stage = 'preflop'; S.stageLabel = '';
   log(`— ${S.handNo}번째 판 —`, 'sys');
+}
+
+async function playHand() {
+  beginHand();
+  const [sb, bb] = blinds();
 
   const live = P().filter(p => !p.out);
   if (live.length === 2) { S.sbSeat = S.dealer; S.bbSeat = nextIn(S.dealer); }
@@ -290,6 +300,10 @@ async function playHand() {
   await showdown();
 }
 
+function scoreHand(p) { return isSeven() ? evalK(p.hand).s : evaluate(p.hand.concat(S.board)); }
+function nameOf(sc) { return isSeven() ? handNameK(sc) : handName(sc); }
+function fiveOf(p) { return isSeven() ? evalK(p.hand).five : bestFive(p.hand.concat(S.board), p.score); }
+
 async function showdown() {
   S.stage = 'showdown';
   const contenders = inHand();
@@ -305,8 +319,8 @@ async function showdown() {
 
   for (const p of contenders) {
     p.show = true;
-    p.score = evaluate(p.hand.concat(S.board));
-    p.last = handName(p.score);
+    p.score = scoreHand(p);
+    p.last = nameOf(p.score);
   }
   render();
   await sleep(500);
@@ -338,12 +352,12 @@ async function showdown() {
     for (const w of winners) {
       const got = share + (rem > 0 ? 1 : 0); if (rem > 0) rem--;
       w.chips += got; w.winner = true;
-      for (const c of bestFive(w.hand.concat(S.board), w.score)) S.highlight.add(cid(c));
+      for (const c of fiveOf(w)) S.highlight.add(cid(c));
     }
     const potName = pots.length === 1 ? '' : (idx === 0 ? '메인 팟 ' : `사이드 팟 ${idx} `);
     const names = winners.map(w => w.name).join(', ');
-    msgs.push(`${potName}${names}${winners.length > 1 ? ' (나눔)' : ''} · ${handName(best)}`);
-    log(`🏆 ${potName}${fmt(pot.amt)} → ${names} (${handName(best)})`, 'win');
+    msgs.push(`${potName}${names}${winners.length > 1 ? ' (나눔)' : ''} · ${nameOf(best)}`);
+    log(`🏆 ${potName}${fmt(pot.amt)} → ${names} (${nameOf(best)})`, 'win');
   });
   for (const p of P()) p.total = 0;
   S.msg = msgs.join('\n');
@@ -410,6 +424,7 @@ function cardHTML(c, opts = {}) {
   const cls = ['card', RED[c.s] ? 'red' : 'black'];
   if (opts.anim) cls.push('anim');
   if (opts.flip) cls.push('flip');
+  if (opts.hid) cls.push('hid');
   if (S.highlight.size && S.highlight.has(cid(c))) cls.push('hl');
   else if (S.highlight.size && opts.dimNonHl) cls.push('dim');
   return `<div class="${cls.join(' ')}"><span class="cr">${rs(c.r)}</span><span class="cs">${SUIT[c.s]}</span><span class="big">${SUIT[c.s]}</span></div>`;
@@ -420,9 +435,11 @@ function render() {
   if (!HAS_DOM || !S) return;
   const players = P();
   const narrow = window.matchMedia('(max-width: 640px)').matches;
-  const pos = (narrow ? SEAT_POS_M : SEAT_POS)[players.length];
+  let pos = (narrow ? SEAT_POS_M : SEAT_POS)[players.length];
+  // 7포커는 가운데 공용 카드가 없으니, 세로 화면에선 아래쪽 옆자리를 조금 올려 내 카드와 안 겹치게
+  if (narrow && isSeven()) pos = pos.map(([x, y]) => [x, y > 60 && y < 80 ? 58 : y]);
   const [sb, bb] = blinds();
-  $('#info').textContent = `${S.handNo}판 · 블라인드 ${fmt(sb)}/${fmt(bb)}`;
+  $('#info').textContent = isSeven() ? `7포커 · ${S.handNo}판 · 참가비 ${fmt(sb)}` : `홀덤 · ${S.handNo}판 · 블라인드 ${fmt(sb)}/${fmt(bb)}`;
 
   const pot = potTotal();
   $('#pot').innerHTML = pot > 0 ? `팟 <b>${fmt(pot)}</b>` : '';
@@ -434,7 +451,7 @@ function render() {
     const c = S.board[i];
     b += c ? cardHTML(c, { anim: i >= boardShown, dimNonHl: true }) : '<div class="card slot"></div>';
   }
-  $('#board').innerHTML = b;
+  $('#board').innerHTML = isSeven() ? (S.stageLabel ? `<div class="stage">${S.stageLabel}</div>` : '') : b;
   boardShown = S.board.length;
 
   $('#msg').textContent = S.msg || '';
@@ -454,8 +471,9 @@ function render() {
     if (!p.out && !(p.folded && !p.human)) {
       p.hand.forEach((c, k) => {
         const anim = k >= (p._seen || 0);
-        const flip = faceUp && !p._up && !p.human;
-        cards += cardHTML(c, { back: !faceUp, anim, flip, dimNonHl: true });
+        const up = faceUp || (isSeven() && c.up);
+        const flip = faceUp && !p._up && !p.human && !(isSeven() && c.up);
+        cards += cardHTML(c, { back: !up, anim, flip, dimNonHl: true, hid: isSeven() && p.human && !c.up && S.stage !== 'choose' });
       });
       p._seen = p.hand.length;
       p._up = faceUp;
@@ -466,7 +484,7 @@ function render() {
     const bx = x + (50 - x) * 0.42, by = y + (48 - y) * 0.42;
     if (p.bet > 0) html += `<div class="betchip" style="left:${bx}%;top:${by}%"><i></i>${fmt(p.bet)}</div>`;
     html += `<div class="${cls.join(' ')}" style="left:${x}%;top:${y}%">
-      <div class="hole">${cards}</div>
+      <div class="hole${isSeven() ? ' seven' : ''}">${cards}</div>
       <div class="plate">${dealer}<span class="av">${p.avatar}</span>
         <div class="nm"><b>${p.name}</b><span>${fmt(p.chips)}</span></div></div>
       ${tag ? `<div class="tag${p.winner ? ' win' : ''}">${tag}</div>` : ''}
@@ -558,7 +576,7 @@ function waitNext(label) {
 
 async function gameLoop() {
   while (true) {
-    await playHand();
+    await (isSeven() ? playHandSeven() : playHand());
     const me = P()[0];
     const alive = P().filter(p => p.chips > 0);
     if (me.chips <= 0) {
@@ -582,7 +600,15 @@ function showEnd(title, sub) {
 }
 
 if (HAS_DOM) {
-  let nBots = 3;
+  let nBots = 3, mode = 'holdem';
+  $('#mode').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    mode = b.dataset.m;
+    for (const x of $('#mode').children) x.classList.toggle('on', x === b);
+    $('#modeSub').textContent = mode === 'seven'
+      ? '한국식 7포커 · 4장 받아 1장 버리고 1장 오픈 · 삥/따당/하프'
+      : '조커 없는 52장 · 시작 칩 1,000 · 블라인드는 8판마다 올라가요';
+  };
   $('#botCount').onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
     nBots = +b.dataset.n;
@@ -591,14 +617,21 @@ if (HAS_DOM) {
   const start = () => {
     $('#start').hidden = true; $('#end').hidden = true;
     logLines = []; boardShown = 0;
-    newGame(nBots);
+    newGame(nBots, false, mode);
+    document.title = mode === 'seven' ? '포커 · 7포커' : '포커 · 텍사스 홀덤';
+    $('.logo').textContent = mode === 'seven' ? '♣ 7포커' : '♠ 홀덤';
     render();
     gameLoop();
   };
   $('#btnStart').onclick = start;
   $('#btnAgain').onclick = () => { $('#end').hidden = true; $('#start').hidden = false; };
   $('#btnNew').onclick = () => { if (!S || confirm('지금 게임을 그만두고 새로 시작할까요?')) location.reload(); };
-  const openRules = () => { $('#rules').hidden = false; };
+  const showRule = t => {
+    for (const b of $('#ruleTabs').children) b.classList.toggle('on', b.dataset.t === t);
+    for (const d of document.querySelectorAll('[data-rule]')) d.hidden = d.dataset.rule !== t;
+  };
+  $('#ruleTabs').onclick = e => { const b = e.target.closest('button'); if (b) showRule(b.dataset.t); };
+  const openRules = () => { showRule(S ? S.mode : mode); $('#rules').hidden = false; };
   $('#btnRules').onclick = openRules;
   document.querySelector('[data-open-rules]').onclick = openRules;
   $('#btnCloseRules').onclick = () => { $('#rules').hidden = true; };
